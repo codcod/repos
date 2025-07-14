@@ -1,0 +1,121 @@
+# Pre-commit configuration for Rust project
+# See https://pre-commit.com for more information
+# See https://pre-commit.com/hooks.html for more hooks
+
+repos:
+  # Built-in hooks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-json
+      - id: check-added-large-files
+        args: ["--maxkb=1000"]
+      - id: check-merge-conflict
+      - id: check-case-conflict
+      - id: mixed-line-ending
+      - id: detect-private-key
+
+  # Rust formatting and linting
+  - repo: https://github.com/doublify/pre-commit-rust
+    rev: v1.0
+    hooks:
+      - id: fmt
+        name: Rust fmt
+        description: Format Rust code with rustfmt
+      - id: clippy
+        name: Rust clippy
+        description: Lint Rust code with clippy
+        args: ["--all-targets", "--all-features", "--", "-D", "warnings"]
+      - id: cargo-check
+        name: Cargo check
+        description: Check Rust code with cargo check
+
+  # Markdown linting
+  - repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: v0.45.0
+    hooks:
+      - id: markdownlint
+        args: ["--fix"]
+        exclude: '^(CHANGELOG\.md|target/)'
+
+  # Git commit message validation
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v4.2.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]
+        args:
+          [
+            optional-scope,
+            feat,
+            fix,
+            docs,
+            style,
+            refactor,
+            perf,
+            test,
+            build,
+            ci,
+            chore,
+            revert,
+          ]
+
+  # Additional security checks for Rust
+  - repo: local
+    hooks:
+      - id: cargo-audit
+        name: Cargo audit
+        description: Check for security vulnerabilities in dependencies
+        entry: bash
+        args:
+          [
+            "-c",
+            'command -v cargo-audit >/dev/null 2>&1 && cargo audit || echo "cargo-audit not installed, skipping..."',
+          ]
+        language: system
+        files: Cargo\.(toml|lock)$
+        pass_filenames: false
+
+      - id: cargo-deny
+        name: Cargo deny
+        description: Check dependencies against policy
+        entry: bash
+        args:
+          [
+            "-c",
+            'command -v cargo-deny >/dev/null 2>&1 && cargo deny check || echo "cargo-deny not installed, skipping..."',
+          ]
+        language: system
+        files: (Cargo\.(toml|lock)|deny\.toml)$
+        pass_filenames: false
+
+      - id: cargo-outdated
+        name: Cargo outdated
+        description: Check for outdated dependencies
+        entry: bash
+        args:
+          [
+            "-c",
+            'command -v cargo-outdated >/dev/null 2>&1 && cargo outdated --exit-code 1 || echo "cargo-outdated not installed, skipping..."',
+          ]
+        language: system
+        files: Cargo\.(toml|lock)$
+        pass_filenames: false
+        stages: [manual] # Only run manually with --hook-stage manual
+
+# Configuration for specific hooks
+ci:
+  autofix_commit_msg: |
+    [pre-commit.ci] auto fixes from pre-commit.com hooks
+
+    for more information, see https://pre-commit.ci
+  autofix_prs: true
+  autoupdate_branch: ""
+  autoupdate_commit_msg: "[pre-commit.ci] pre-commit autoupdate"
+  autoupdate_schedule: weekly
+  skip: [cargo-audit, cargo-deny, cargo-outdated] # Skip these in CI and local runs (they take too long)
+  submodules: false

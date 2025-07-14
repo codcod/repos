@@ -1,0 +1,27 @@
+# Git
+.git
+.gitignore
+
+# Documentation
+*.md
+docs/
+
+# CI/CD
+.github/
+
+# IDE
+.vscode/
+.idea/
+
+# Build artifacts
+target/
+Cargo.lock
+
+# Local configs and data
+config.yaml
+cloned_repos/
+logs/
+
+# OS specific
+.DS_Store
+Thumbs.db
