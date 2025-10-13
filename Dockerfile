@@ -1,42 +1,41 @@
 # Build stage
-FROM rust:1.88-alpine3.22 as builder
+FROM rust:1.90-alpine3.22 AS builder
 
 WORKDIR /app
 
-# Install dependencies
-RUN apt-get update && apt-get install -y \
-    pkg-config \
-    libssl-dev \
+# Install build dependencies for Alpine
+RUN apk add --no-cache \
+    musl-dev \
+    pkgconfig \
+    openssl-dev \
+    openssl-libs-static \
     git \
-    && rm -rf /var/lib/apt/lists/*
+    gcc
 
-# Copy source code
-COPY . .
+# Copy dependency files first for better caching
+COPY Cargo.toml Cargo.lock ./
 
-# Build the application
-RUN cargo build --release
+# Create dummy source to build dependencies
+RUN mkdir src && echo "fn main() {}" > src/main.rs && \
+    cargo build --release && \
+    rm -rf src
 
-# Runtime stage
-FROM debian:12.8-slim
+# Copy actual source code
+COPY src ./src
 
-# Install runtime dependencies
-RUN apt-get update && apt-get install -y \
-    git \
-    ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+# Build the application with optimizations (already musl in Alpine)
+RUN cargo build --release && \
+    strip target/release/repos
 
-# Create a non-root user
-RUN useradd -r -s /bin/false repos
+# Runtime stage - use scratch for minimal size
+FROM scratch
 
-# Copy the binary from builder stage
-COPY --from=builder /app/target/release/repos /usr/local/bin/repos
+# Copy CA certificates for HTTPS
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
-# Set the user
-USER repos
-
-# Set the working directory
-WORKDIR /workspace
+# Copy the statically linked binary
+COPY --from=builder /app/target/release/repos /repos
 
 # Set the entrypoint
-ENTRYPOINT ["repos"]
+ENTRYPOINT ["/repos"]
 CMD ["--help"]

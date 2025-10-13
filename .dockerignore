@@ -15,7 +15,6 @@ docs/
 
 # Build artifacts
 target/
-Cargo.lock
 
 # Local configs and data
 config.yaml
