@@ -69,7 +69,6 @@ jobs:
           tag_prefix: "v"
           major_pattern: "(MAJOR|BREAKING CHANGE|!:)"
           minor_pattern: "(MINOR|feat:|feature:)"
-          patch_pattern: "(PATCH|fix:|patch:|hotfix:)"
           version_format: "${major}.${minor}.${patch}"
           change_path: "src"
           namespace: ""
@@ -177,22 +176,23 @@ jobs:
           key: ${{ matrix.target }}
 
       - name: Build for ${{ matrix.target }}
-        run: |
-          cargo build --release --target ${{ matrix.target }}
-          if [[ "${{ matrix.target }}" == *"windows"* ]]; then
-            mv target/${{ matrix.target }}/release/repos.exe repos-${{ matrix.target }}.exe
-          else
-            mv target/${{ matrix.target }}/release/repos repos-${{ matrix.target }}
-          fi
+        run: cargo build --release --target ${{ matrix.target }}
 
-      - name: Strip binary (Unix only)
-        if: matrix.suffix == ''
-        run: |
-          if [[ "${{ runner.os }}" == "macOS" ]]; then
-            strip -x repos-${{ matrix.target }}
-          else
-            strip repos-${{ matrix.target }}
-          fi
+      - name: Rename Windows binary
+        if: contains(matrix.target, 'windows')
+        run: mv target/${{ matrix.target }}/release/repos.exe repos-${{ matrix.target }}.exe
+
+      - name: Rename Unix binary
+        if: "!contains(matrix.target, 'windows')"
+        run: mv target/${{ matrix.target }}/release/repos repos-${{ matrix.target }}
+
+      - name: Strip binary (macOS)
+        if: "!contains(matrix.target, 'windows') && runner.os == 'macOS'"
+        run: strip -x repos-${{ matrix.target }}
+
+      - name: Strip binary (Linux)
+        if: "!contains(matrix.target, 'windows') && runner.os == 'Linux'"
+        run: strip repos-${{ matrix.target }}
 
       - name: Create archive
         shell: bash
