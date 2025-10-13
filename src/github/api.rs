@@ -11,7 +11,6 @@ use uuid::Uuid;
 // Constants for maintainability
 const DEFAULT_BRANCH_PREFIX: &str = "automated-changes";
 const UUID_LENGTH: usize = 6;
-const DEFAULT_BASE_BRANCH: &str = "main";
 
 /// Create a pull request for a repository
 pub async fn create_pull_request(repo: &Repository, options: &PrOptions) -> Result<()> {
@@ -66,11 +65,12 @@ async fn create_github_pr(repo: &Repository, branch_name: &str, options: &PrOpti
     // Extract owner and repo name from URL
     let (owner, repo_name) = client.parse_github_url(&repo.url)?;
 
-    // Determine base branch
-    let base_branch = options
-        .base_branch
-        .clone()
-        .unwrap_or_else(|| DEFAULT_BASE_BRANCH.to_string());
+    // Determine base branch - get actual default branch if not specified
+    let base_branch = if let Some(ref base) = options.base_branch {
+        base.clone()
+    } else {
+        git::get_default_branch(&repo.get_target_dir())?
+    };
 
     let result = client
         .create_pull_request(PullRequestParams::new(

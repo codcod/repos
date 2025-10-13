@@ -17,10 +17,11 @@ pub fn find_git_repositories(start_path: &str) -> Result<Vec<Repository>> {
         let path = entry.path();
 
         // Check if this directory contains a .git folder
-        if path.is_dir() && path.join(".git").exists() {
-            if let Some(repo) = create_repository_from_path(path)? {
-                repositories.push(repo);
-            }
+        if path.is_dir()
+            && path.join(".git").exists()
+            && let Some(repo) = create_repository_from_path(path)?
+        {
+            repositories.push(repo);
         }
     }
 
@@ -67,11 +68,11 @@ fn get_remote_url(repo_path: &Path) -> Result<Option<String>> {
         .current_dir(repo_path)
         .output();
 
-    if let Ok(output) = output {
-        if output.status.success() {
-            let url = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            return Ok(Some(url));
-        }
+    if let Ok(output) = output
+        && output.status.success()
+    {
+        let url = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        return Ok(Some(url));
     }
 
     Ok(None)
