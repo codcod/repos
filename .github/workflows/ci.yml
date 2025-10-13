@@ -23,20 +23,14 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@master
+        uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: ${{ matrix.rust }}
 
       - name: Cache dependencies
-        uses: actions/cache@v4
+        uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ matrix.rust }}
 
       - name: Check formatting
         run: cargo fmt --all -- --check
@@ -50,7 +44,12 @@ jobs:
         run: cargo test --verbose
 
       - name: Build
+        run: cargo build --verbose
+        if: matrix.rust != 'stable'
+
+      - name: Build (release)
         run: cargo build --verbose --release
+        if: matrix.rust == 'stable'
 
   security_audit:
     name: Security Audit
@@ -63,15 +62,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Cache dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+        uses: Swatinem/rust-cache@v2
 
       - name: Install cargo-audit
         run: cargo install cargo-audit
@@ -130,15 +121,9 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Cache dependencies
-        uses: actions/cache@v4
+        uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ matrix.os }}
 
       - name: Build
         run: cargo build --verbose --release
