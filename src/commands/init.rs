@@ -34,23 +34,23 @@ impl Command for InitCommand {
             .into_iter()
             .filter_map(|e| e.ok())
         {
-            if entry.file_name() == ".git" && entry.file_type().is_dir() {
-                if let Some(repo_dir) = entry.path().parent() {
-                    if let Some(name) = repo_dir.file_name().and_then(|n| n.to_str()) {
-                        // Try to get remote URL
-                        if let Ok(url) = get_git_remote_url(repo_dir) {
-                            let repo = RepositoryBuilder::new(name.to_string(), url)
-                                .with_path(
-                                    repo_dir
-                                        .strip_prefix(&current_dir)
-                                        .unwrap_or(repo_dir)
-                                        .to_string_lossy()
-                                        .to_string(),
-                                )
-                                .build();
-                            repositories.push(repo);
-                        }
-                    }
+            if entry.file_name() == ".git"
+                && entry.file_type().is_dir()
+                && let Some(repo_dir) = entry.path().parent()
+                && let Some(name) = repo_dir.file_name().and_then(|n| n.to_str())
+            {
+                // Try to get remote URL
+                if let Ok(url) = get_git_remote_url(repo_dir) {
+                    let repo = RepositoryBuilder::new(name.to_string(), url)
+                        .with_path(
+                            repo_dir
+                                .strip_prefix(&current_dir)
+                                .unwrap_or(repo_dir)
+                                .to_string_lossy()
+                                .to_string(),
+                        )
+                        .build();
+                    repositories.push(repo);
                 }
             }
         }

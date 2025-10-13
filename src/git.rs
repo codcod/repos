@@ -180,3 +180,37 @@ pub fn push_branch(repo_path: &str, branch_name: &str) -> Result<()> {
 
     Ok(())
 }
+
+pub fn get_default_branch(repo_path: &str) -> Result<String> {
+    // Try to get the default branch using git symbolic-ref
+    let output = Command::new("git")
+        .args(["symbolic-ref", "refs/remotes/origin/HEAD"])
+        .current_dir(repo_path)
+        .output();
+
+    if let Ok(output) = output
+        && output.status.success()
+    {
+        let branch_ref = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if let Some(branch) = branch_ref.strip_prefix("refs/remotes/origin/") {
+            return Ok(branch.to_string());
+        }
+    }
+
+    // Fallback: try to get the current branch
+    let output = Command::new("git")
+        .args(["branch", "--show-current"])
+        .current_dir(repo_path)
+        .output()
+        .context("Failed to execute git branch command")?;
+
+    if output.status.success() {
+        let current_branch = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if !current_branch.is_empty() {
+            return Ok(current_branch);
+        }
+    }
+
+    // Final fallback to "main"
+    Ok("main".to_string())
+}
