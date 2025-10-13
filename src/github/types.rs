@@ -146,6 +146,6 @@ pub struct PullRequest {
 
 /// Constants for GitHub API
 pub mod constants {
-    pub const GITHUB_API_BASE: &str = "https://api.github.com";
-    pub const DEFAULT_USER_AGENT: &str = "repos/0.1.0";
+    // Re-export from centralized constants
+    pub use crate::constants::github::{API_BASE as GITHUB_API_BASE, DEFAULT_USER_AGENT};
 }

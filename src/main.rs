@@ -1,6 +1,6 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use repos::{commands::*, config::Config};
+use repos::{commands::*, config::Config, constants};
 use std::env;
 
 #[derive(Parser)]
@@ -20,7 +20,7 @@ enum Commands {
         repos: Vec<String>,
 
         /// Configuration file path
-        #[arg(short, long, default_value = "config.yaml")]
+        #[arg(short, long, default_value_t = constants::config::DEFAULT_CONFIG_FILE.to_string())]
         config: String,
 
         /// Filter repositories by tag
@@ -41,11 +41,11 @@ enum Commands {
         repos: Vec<String>,
 
         /// Directory to store log files
-        #[arg(short, long, default_value = "logs")]
+        #[arg(short, long, default_value_t = constants::config::DEFAULT_LOGS_DIR.to_string())]
         logs: String,
 
         /// Configuration file path
-        #[arg(short, long, default_value = "config.yaml")]
+        #[arg(short, long, default_value_t = constants::config::DEFAULT_CONFIG_FILE.to_string())]
         config: String,
 
         /// Filter repositories by tag
@@ -95,7 +95,7 @@ enum Commands {
         create_only: bool,
 
         /// Configuration file path
-        #[arg(short, long, default_value = "config.yaml")]
+        #[arg(short, long, default_value_t = constants::config::DEFAULT_CONFIG_FILE.to_string())]
         config: String,
 
         /// Filter repositories by tag
@@ -113,7 +113,7 @@ enum Commands {
         repos: Vec<String>,
 
         /// Configuration file path
-        #[arg(short, long, default_value = "config.yaml")]
+        #[arg(short, long, default_value_t = constants::config::DEFAULT_CONFIG_FILE.to_string())]
         config: String,
 
         /// Filter repositories by tag
@@ -128,7 +128,7 @@ enum Commands {
     /// Create a config.yaml file from discovered Git repositories
     Init {
         /// Output file name
-        #[arg(short, long, default_value = "config.yaml")]
+        #[arg(short, long, default_value_t = constants::config::DEFAULT_CONFIG_FILE.to_string())]
         output: String,
 
         /// Overwrite existing file if it exists

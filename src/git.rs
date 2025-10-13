@@ -211,6 +211,6 @@ pub fn get_default_branch(repo_path: &str) -> Result<String> {
         }
     }
 
-    // Final fallback to "main"
-    Ok("main".to_string())
+    // Final fallback to default branch
+    Ok(crate::constants::git::FALLBACK_BRANCH.to_string())
 }
