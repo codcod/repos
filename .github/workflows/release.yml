@@ -196,7 +196,7 @@ jobs:
 
       - name: Strip binary (Unix only)
         if: matrix.suffix == ''
-        run: strip target/${{ matrix.target }}/release/repos${{ matrix.suffix }}
+        run: strip repos-${{ matrix.target }}
 
       - name: Create archive
         shell: bash
