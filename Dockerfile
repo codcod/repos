@@ -13,7 +13,8 @@ RUN apk add --no-cache \
     gcc
 
 # Copy dependency files first for better caching
-COPY Cargo.toml Cargo.lock ./
+COPY Cargo.toml ./
+COPY Cargo.loc[k] ./
 
 # Create dummy source to build dependencies
 RUN mkdir src && echo "fn main() {}" > src/main.rs && \
