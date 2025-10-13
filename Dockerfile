@@ -19,7 +19,7 @@ COPY Cargo.loc[k] ./
 # Create dummy source to build dependencies
 RUN mkdir src && echo "fn main() {}" > src/main.rs && \
     cargo build --release && \
-    rm -rf src
+    rm -rf src target/release/deps/repos*
 
 # Copy actual source code
 COPY src ./src

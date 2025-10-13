@@ -148,9 +148,9 @@ jobs:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-musl
             suffix: ""
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-            suffix: ".exe"
+          # - os: windows-latest
+          #   target: x86_64-pc-windows-msvc
+          #   suffix: ".exe"
           - os: macos-latest
             target: x86_64-apple-darwin
             suffix: ""
