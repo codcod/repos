@@ -5,7 +5,7 @@ use std::env;
 
 #[derive(Parser)]
 #[command(name = "repos")]
-#[command(about = "A tool to manage multiple GitHub repositories")]
+#[command(about = "A cli tool to manage multiple GitHub repositories")]
 #[command(version)]
 struct Cli {
     #[command(subcommand)]
