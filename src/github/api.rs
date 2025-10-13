@@ -3,14 +3,11 @@
 use super::client::GitHubClient;
 use super::types::{PrOptions, PullRequestParams};
 use crate::config::Repository;
+use crate::constants::github::{DEFAULT_BRANCH_PREFIX, UUID_LENGTH};
 use crate::git;
 use anyhow::Result;
 use colored::*;
 use uuid::Uuid;
-
-// Constants for maintainability
-const DEFAULT_BRANCH_PREFIX: &str = "automated-changes";
-const UUID_LENGTH: usize = 6;
 
 /// Create a pull request for a repository
 pub async fn create_pull_request(repo: &Repository, options: &PrOptions) -> Result<()> {

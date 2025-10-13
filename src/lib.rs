@@ -2,6 +2,7 @@
 
 pub mod commands;
 pub mod config;
+pub mod constants;
 pub mod git;
 pub mod github;
 pub mod runner;

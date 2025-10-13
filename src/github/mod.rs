@@ -10,3 +10,6 @@ pub use api::create_pull_request;
 pub use auth::GitHubAuth;
 pub use client::GitHubClient;
 pub use types::{PrOptions, PullRequestParams};
+
+// Re-export constants for easy access
+pub use crate::constants::github::{DEFAULT_BRANCH_PREFIX, DEFAULT_USER_AGENT};
