@@ -4,6 +4,19 @@ Repos is a CLI tool to manage multiple GitHub repositories - clone them, run
 commands across all repositories, create pull requests, and more—all with
 colored output and comprehensive logging.
 
+## Table of contents
+
+- [Features](#features)
+- [Installation](#installation)
+- [Configuration](#configuration)
+- [Usage](#usage)
+  - [Repository management](#repository-management)
+  - [Running commands](#running-commands)
+  - [Creating Pull Requests](#creating-pull-requests)
+- [Docker image](#docker-image)
+- [Contributing](#contributing)
+- [License](#license)
+
 ## Features
 
 - **Multi-repository management**: Clone and manage multiple repositories from a
@@ -20,7 +33,7 @@ repositories
 
 ## Installation
 
-### From Source
+### From source
 
 ```bash
 git clone https://github.com/codcod/repos.git
@@ -77,7 +90,7 @@ git clone http://github.com/example/project2.git
 repos init
 ```
 
-## Typical Session
+## Typical session
 
 Once you have a configuration file in place, an example session can look like the following:
 
@@ -100,7 +113,7 @@ repos pr --title "Update dependencies" --body "Update Cargo.lock files"
 
 ## Usage
 
-### Repository Management
+### Repository management
 
 To configure, clone and remove repositories:
 
@@ -136,7 +149,7 @@ repos rm -t rust
 repos rm -p
 ```
 
-### Running Commands
+### Running commands
 
 To run arbitrary commands in repositories:
 
@@ -154,7 +167,7 @@ repos run -p "cargo test"
 repos run -l custom/logs "make build"
 ```
 
-#### Example Commands
+#### Example commands
 
 Example commands to run with `repos run ""`:
 
@@ -180,25 +193,38 @@ git log --all --author='$(id -un)' --since='1 month ago' --pretty=format:'%h %an
 
 ### Creating Pull Requests
 
-To submit changes made in the cloned repositories:
+Set GITHUB_TOKEN in the environment (or pass via `--token`), then:
 
 ```bash
-export GITHUB_TOKEN=your_github_token
+# Basic: create PRs for repos with changes
+export GITHUB_TOKEN=your_token
+repos pr --title "Update deps" --body "Update Cargo.lock files"
 
-# Create PRs for repositories with changes
-repos pr --title "My changes" --body "Description of changes"
+# Use a specific branch name and base branch
+repos pr --branch feature/foo --base develop --title "My change"
 
-# Create PRs with specific branch name
-repos pr --branch feature/my-changes --title "My changes"
+# Commit message override and make draft PRs
+repos pr --commit-msg "chore: update deps" --draft
 
-# Create draft pull requests
-repos pr --draft
+# Only create PR (don't push/commit) — useful for dry-run workflows
+repos pr --create-only
 
-# Create PRs for specific repositories
-repos pr -t backend
+# Filter repositories and run in parallel
+repos pr -t backend -p --title "Backend changes"
 ```
 
-## Command Reference
+Available PR options (CLI flags)
+
+- --title TITLE (required for PR creation)
+- --body BODY
+- --branch / --branch-name NAME (optional)
+- --base BRANCH (optional; defaults to repo default branch — will detect it)
+- --commit-msg MSG (optional)
+- --draft (optional)
+- --create-only (optional)
+- --token TOKEN (optional; otherwise uses GITHUB_TOKEN env var)
+
+## Command reference
 
 ```text
 A tool to manage multiple GitHub repositories
@@ -232,6 +258,26 @@ Options:
 - `chrono` - Date/time operations
 - `walkdir` - Directory traversal
 - `uuid` - Unique ID generation
+
+## Docker image
+
+Quick usage:
+
+```bash
+# build image (from repo root)
+docker build -t repos:latest .
+
+# run help
+docker run --rm repos:latest
+
+# run PR command (ensure token passed)
+docker run --rm
+  -e GITHUB_TOKEN="$GITHUB_TOKEN" \
+  repos:latest pr --title "fix: update config" --body "Detailed description"
+```
+
+Tip: mount host workspace if operations need local files:
+`docker run --rm -v "$(pwd):/work" -w /work -e GITHUB_TOKEN="$GITHUB_TOKEN" repos:latest run "ls -la"`
 
 ## Contributing
 
