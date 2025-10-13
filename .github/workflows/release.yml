@@ -97,6 +97,7 @@ jobs:
           git config --local user.name "GitHub Action"
           git add Cargo.toml
           git commit -m "chore: bump version to ${{ needs.semantic-version.outputs.version }}" || exit 0
+          git push || exit 0
 
       - name: Create Release
         id: create_release
@@ -161,6 +162,12 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - name: Pull latest changes
+        run: git pull origin main
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -223,6 +230,12 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - name: Pull latest changes
+        run: git pull origin main
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -279,10 +292,12 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 1
 
-      - name: Update Cargo.toml version
-        run: |
-          sed -i.bak 's/^version = ".*"/version = "${{ needs.semantic-version.outputs.version }}"/' Cargo.toml && rm Cargo.toml.bak
+      - name: Pull latest changes
+        run: git pull origin main
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
