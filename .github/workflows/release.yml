@@ -323,8 +323,21 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Extract metadata
-      id: meta
+    - name: Extract metadata for 0.x versions
+      id: meta-prerelease
+      if: startsWith(needs.semantic-version.outputs.version, '0.')
+      uses: docker/metadata-action@v5
+      with:
+        images: |
+          ${{ secrets.DOCKER_USERNAME }}/repos
+          ghcr.io/${{ github.repository }}
+        tags: |
+          type=semver,pattern={{version}},value=${{ needs.semantic-version.outputs.version }}
+          type=raw,value=latest
+
+    - name: Extract metadata for 1.x+ versions
+      id: meta-stable
+      if: "!startsWith(needs.semantic-version.outputs.version, '0.')"
       uses: docker/metadata-action@v5
       with:
         images: |
@@ -342,8 +355,8 @@ jobs:
         context: .
         platforms: linux/amd64,linux/arm64
         push: true
-        tags: ${{ steps.meta.outputs.tags }}
-        labels: ${{ steps.meta.outputs.labels }}
+        tags: ${{ steps.meta-prerelease.outputs.tags || steps.meta-stable.outputs.tags }}
+        labels: ${{ steps.meta-prerelease.outputs.labels || steps.meta-stable.outputs.labels }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
         provenance: false
