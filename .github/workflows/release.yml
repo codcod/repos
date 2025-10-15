@@ -110,29 +110,7 @@ jobs:
           prerelease: false
           generate_release_notes: true
           body: |
-            ## Changes
-
             ${{ needs.semantic-version.outputs.changelog }}
-
-            ## Installation
-
-            ### Binary Downloads
-
-            You can download pre-built binaries for your platform from the assets below.
-
-            ### Cargo Install
-
-            ```bash
-            cargo install repos
-            ```
-
-            ### From Source
-
-            ```bash
-            git clone https://github.com/${{ github.repository }}.git
-            cd repos
-            cargo build --release
-            ```
 
   build-release:
     name: Build Release Binary
