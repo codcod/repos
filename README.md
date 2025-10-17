@@ -292,6 +292,7 @@ Tip: mount host workspace if operations need local files:
 
 - [Release Guide](docs/release.md) - Release conventions
 - [Semantic Versioning Guide](docs/semantic.md) - How to use semantic versioning
+- [Release Strategy](docs/release-strategy.md) - Release branch strategy and feature aggregation
 
 ## Alternatives
 

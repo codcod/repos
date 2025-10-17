@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - 'release/**'
     paths:
       - 'src/**'
       - 'Cargo.toml'
@@ -11,10 +12,18 @@ on:
   pull_request:
     branches:
       - main
+      - 'release/**'
     paths:
       - 'src/**'
       - 'Cargo.toml'
       - 'Cargo.lock'
+  workflow_dispatch:
+    inputs:
+      release_branch:
+        description: 'Release branch to build from (e.g., release/1.2)'
+        required: false
+        default: 'main'
+        type: string
 
 permissions:
   contents: write
@@ -60,22 +69,20 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v5
         with:
+          ref: ${{ github.event.inputs.release_branch || github.ref }}
           fetch-depth: 0
 
-      - name: Semantic Version
+      - name: Semantic version
         id: version
-        uses: paulhatch/semantic-version@v5.4.0
+        uses: PaulHatch/semantic-version@v5.4.0
         with:
           tag_prefix: "v"
-          major_pattern: "(MAJOR|BREAKING CHANGE|!:)"
-          minor_pattern: "(MINOR|feat:|feature:)"
-          version_format: "${major}.${minor}.${patch}"
-          change_path: "src"
-          namespace: ""
+          major_pattern: "BREAKING CHANGE:"
+          minor_pattern: "feat:"
           bump_each_commit: false
           search_commit_body: true
           user_format_type: "csv"
-          enable_prerelease_mode: false
+          enable_prerelease_mode: true
 
   create-release:
     name: Create Release
