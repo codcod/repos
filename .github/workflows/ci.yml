@@ -94,7 +94,6 @@ jobs:
         token: ${{ secrets.CODECOV_TOKEN }}
         files: lcov.info
         fail_ci_if_error: true
-      if: ${{ secrets.CODECOV_TOKEN != '' }}
 
   cross_platform:
     name: Cross Platform Build
