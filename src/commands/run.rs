@@ -45,6 +45,9 @@ impl Command for RunCommand {
 
         let runner = CommandRunner::new();
 
+        let mut errors = Vec::new();
+        let mut successful = 0;
+
         if context.parallel {
             let tasks: Vec<_> = repositories
                 .into_iter()
@@ -52,31 +55,67 @@ impl Command for RunCommand {
                     let runner = &runner;
                     let command = self.command.clone();
                     let log_dir = self.log_dir.clone();
-                    async move { runner.run_command(&repo, &command, Some(&log_dir)).await }
+                    async move {
+                        (
+                            repo.name.clone(),
+                            runner.run_command(&repo, &command, Some(&log_dir)).await,
+                        )
+                    }
                 })
                 .collect();
 
             for task in tasks {
-                if let Err(e) = task.await {
-                    eprintln!("{}", format!("Error: {e}").red());
+                let (repo_name, result) = task.await;
+                match result {
+                    Ok(_) => successful += 1,
+                    Err(e) => {
+                        eprintln!("{}", format!("Error: {e}").red());
+                        errors.push((repo_name, e));
+                    }
                 }
             }
         } else {
             for repo in repositories {
-                if let Err(e) = runner
+                match runner
                     .run_command(&repo, &self.command, Some(&self.log_dir))
                     .await
                 {
-                    eprintln!(
-                        "{} | {}",
-                        repo.name.cyan().bold(),
-                        format!("Error: {e}").red()
-                    );
+                    Ok(_) => successful += 1,
+                    Err(e) => {
+                        eprintln!(
+                            "{} | {}",
+                            repo.name.cyan().bold(),
+                            format!("Error: {e}").red()
+                        );
+                        errors.push((repo.name.clone(), e));
+                    }
                 }
             }
         }
 
-        println!("{}", "Done running commands".green());
+        // Report summary
+        if errors.is_empty() {
+            println!("{}", "Done running commands".green());
+        } else {
+            println!(
+                "{}",
+                format!(
+                    "Completed with {} successful, {} failed",
+                    successful,
+                    errors.len()
+                )
+                .yellow()
+            );
+
+            // If all operations failed, return an error to propagate to main
+            if successful == 0 {
+                return Err(anyhow::anyhow!(
+                    "All command executions failed. First error: {}",
+                    errors[0].1
+                ));
+            }
+        }
+
         Ok(())
     }
 }
