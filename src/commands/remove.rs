@@ -35,13 +35,17 @@ impl Command for RemoveCommand {
             format!("Removing {} repositories...", repositories.len()).green()
         );
 
+        let mut errors = Vec::new();
+        let mut successful = 0;
+
         if context.parallel {
             let tasks: Vec<_> = repositories
                 .into_iter()
                 .map(|repo| {
+                    let repo_name = repo.name.clone();
                     tokio::spawn(async move {
                         let target_dir = repo.get_target_dir();
-                        tokio::task::spawn_blocking(move || {
+                        let result = tokio::task::spawn_blocking(move || {
                             if std::path::Path::new(&target_dir).exists() {
                                 fs::remove_dir_all(&target_dir).map_err(anyhow::Error::from)
                             } else {
@@ -49,36 +53,73 @@ impl Command for RemoveCommand {
                                 Ok(())
                             }
                         })
-                        .await?
+                        .await?;
+                        Ok::<_, anyhow::Error>((repo_name, result))
                     })
                 })
                 .collect();
 
             for task in tasks {
-                if let Err(e) = task.await? {
-                    eprintln!("{}", format!("Error: {e}").red());
+                match task.await? {
+                    Ok((_, Ok(_))) => successful += 1,
+                    Ok((repo_name, Err(e))) => {
+                        eprintln!("{}", format!("Error: {e}").red());
+                        errors.push((repo_name, e));
+                    }
+                    Err(e) => {
+                        eprintln!("{}", format!("Task error: {e}").red());
+                        errors.push(("unknown".to_string(), e));
+                    }
                 }
             }
         } else {
             for repo in repositories {
                 let target_dir = repo.get_target_dir();
                 if std::path::Path::new(&target_dir).exists() {
-                    if let Err(e) = fs::remove_dir_all(&target_dir) {
-                        eprintln!(
-                            "{} | {}",
-                            repo.name.cyan().bold(),
-                            format!("Error: {e}").red()
-                        );
-                    } else {
-                        println!("{} | {}", repo.name.cyan().bold(), "Removed".green());
+                    match fs::remove_dir_all(&target_dir) {
+                        Ok(_) => {
+                            println!("{} | {}", repo.name.cyan().bold(), "Removed".green());
+                            successful += 1;
+                        }
+                        Err(e) => {
+                            eprintln!(
+                                "{} | {}",
+                                repo.name.cyan().bold(),
+                                format!("Error: {e}").red()
+                            );
+                            errors.push((repo.name.clone(), e.into()));
+                        }
                     }
                 } else {
                     println!("{} | Directory does not exist", repo.name.cyan().bold());
+                    successful += 1; // Count as success since the desired state is achieved
                 }
             }
         }
 
-        println!("{}", "Done removing repositories".green());
+        // Report summary
+        if errors.is_empty() {
+            println!("{}", "Done removing repositories".green());
+        } else {
+            println!(
+                "{}",
+                format!(
+                    "Completed with {} successful, {} failed",
+                    successful,
+                    errors.len()
+                )
+                .yellow()
+            );
+
+            // If all operations failed, return an error to propagate to main
+            if successful == 0 {
+                return Err(anyhow::anyhow!(
+                    "All removal operations failed. First error: {}",
+                    errors[0].1
+                ));
+            }
+        }
+
         Ok(())
     }
 }

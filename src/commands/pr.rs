@@ -59,33 +59,72 @@ impl Command for PrCommand {
             create_only: self.create_only,
         };
 
+        let mut errors = Vec::new();
+        let mut successful = 0;
+
         if context.parallel {
             let tasks: Vec<_> = repositories
                 .into_iter()
                 .map(|repo| {
                     let pr_options = pr_options.clone();
-                    async move { github::create_pull_request(&repo, &pr_options).await }
+                    async move {
+                        (
+                            repo.name.clone(),
+                            github::create_pull_request(&repo, &pr_options).await,
+                        )
+                    }
                 })
                 .collect();
 
             for task in tasks {
-                if let Err(e) = task.await {
-                    eprintln!("{}", format!("Error: {e}").red());
+                let (repo_name, result) = task.await;
+                match result {
+                    Ok(_) => successful += 1,
+                    Err(e) => {
+                        eprintln!("{}", format!("Error: {e}").red());
+                        errors.push((repo_name, e));
+                    }
                 }
             }
         } else {
             for repo in repositories {
-                if let Err(e) = github::create_pull_request(&repo, &pr_options).await {
-                    eprintln!(
-                        "{} | {}",
-                        repo.name.cyan().bold(),
-                        format!("Error: {e}").red()
-                    );
+                match github::create_pull_request(&repo, &pr_options).await {
+                    Ok(_) => successful += 1,
+                    Err(e) => {
+                        eprintln!(
+                            "{} | {}",
+                            repo.name.cyan().bold(),
+                            format!("Error: {e}").red()
+                        );
+                        errors.push((repo.name.clone(), e));
+                    }
                 }
             }
         }
 
-        println!("{}", "Done processing pull requests".green());
+        // Report summary
+        if errors.is_empty() {
+            println!("{}", "Done processing pull requests".green());
+        } else {
+            println!(
+                "{}",
+                format!(
+                    "Completed with {} successful, {} failed",
+                    successful,
+                    errors.len()
+                )
+                .yellow()
+            );
+
+            // If all operations failed, return an error to propagate to main
+            if successful == 0 {
+                return Err(anyhow::anyhow!(
+                    "All pull request operations failed. First error: {}",
+                    errors[0].1
+                ));
+            }
+        }
+
         Ok(())
     }
 }

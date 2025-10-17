@@ -35,35 +35,77 @@ impl Command for CloneCommand {
             format!("Cloning {} repositories...", repositories.len()).green()
         );
 
+        let mut errors = Vec::new();
+        let mut successful = 0;
+
         if context.parallel {
             let tasks: Vec<_> = repositories
                 .into_iter()
                 .map(|repo| {
+                    let repo_name = repo.name.clone();
                     tokio::spawn(async move {
-                        tokio::task::spawn_blocking(move || git::clone_repository(&repo)).await?
+                        let result =
+                            tokio::task::spawn_blocking(move || git::clone_repository(&repo))
+                                .await?;
+                        Ok::<_, anyhow::Error>((repo_name, result))
                     })
                 })
                 .collect();
 
             for task in tasks {
-                if let Err(e) = task.await? {
-                    eprintln!("{}", format!("Error: {e}").red());
+                match task.await? {
+                    Ok((_, Ok(_))) => successful += 1,
+                    Ok((repo_name, Err(e))) => {
+                        eprintln!("{}", format!("Error: {e}").red());
+                        errors.push((repo_name, e));
+                    }
+                    Err(e) => {
+                        eprintln!("{}", format!("Task error: {e}").red());
+                        errors.push(("unknown".to_string(), e));
+                    }
                 }
             }
         } else {
             for repo in repositories {
-                if let Err(e) = tokio::task::spawn_blocking({
+                let repo_name = repo.name.clone();
+                match tokio::task::spawn_blocking({
                     let repo = repo.clone();
                     move || git::clone_repository(&repo)
                 })
                 .await?
                 {
-                    eprintln!("{}", format!("Error: {e}").red());
+                    Ok(_) => successful += 1,
+                    Err(e) => {
+                        eprintln!("{}", format!("Error: {e}").red());
+                        errors.push((repo_name, e));
+                    }
                 }
             }
         }
 
-        println!("{}", "Done cloning repositories".green());
+        // Report summary
+        if errors.is_empty() {
+            println!("{}", "Done cloning repositories".green());
+        } else {
+            println!(
+                "{}",
+                format!(
+                    "Completed with {} successful, {} failed",
+                    successful,
+                    errors.len()
+                )
+                .yellow()
+            );
+
+            // If all operations failed, return an error to propagate to main
+            if successful == 0 {
+                return Err(anyhow::anyhow!(
+                    "All clone operations failed. First error: {}",
+                    errors[0].1
+                ));
+            }
+        }
+
         Ok(())
     }
 }

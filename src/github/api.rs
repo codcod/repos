@@ -50,13 +50,23 @@ pub async fn create_pull_request(repo: &Repository, options: &PrOptions) -> Resu
         git::push_branch(&repo_path, &branch_name)?;
 
         // Create PR via GitHub API
-        create_github_pr(repo, &branch_name, options).await?;
+        let pr_url = create_github_pr(repo, &branch_name, options).await?;
+        println!(
+            "{} | {} {}",
+            repo.name.cyan().bold(),
+            "Pull request created:".green(),
+            pr_url
+        );
     }
 
     Ok(())
 }
 
-async fn create_github_pr(repo: &Repository, branch_name: &str, options: &PrOptions) -> Result<()> {
+async fn create_github_pr(
+    repo: &Repository,
+    branch_name: &str,
+    options: &PrOptions,
+) -> Result<String> {
     let client = GitHubClient::new(Some(options.token.clone()));
 
     // Extract owner and repo name from URL
@@ -81,13 +91,9 @@ async fn create_github_pr(repo: &Repository, branch_name: &str, options: &PrOpti
         ))
         .await?;
 
-    let pr_url = result["html_url"].as_str().unwrap_or("unknown");
-    println!(
-        "{} | {} {}",
-        repo.name.cyan().bold(),
-        "Pull request created:".green(),
-        pr_url
-    );
+    let pr_url = result["html_url"]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("No html_url in GitHub API response"))?;
 
-    Ok(())
+    Ok(pr_url.to_string())
 }
