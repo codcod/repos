@@ -253,15 +253,38 @@ jobs:
           tag_name: ${{ needs.semantic-version.outputs.version_tag }}
           files: ${{ env.UNIVERSAL_ASSET }}
 
-  publish-crate:
-    name: Publish to crates.io
-    needs: [semantic-version, create-release, build-release, build-universal-macos]
-    runs-on: ubuntu-latest
-    if: needs.semantic-version.outputs.changed == 'true' && github.event_name == 'push' && !contains(needs.semantic-version.outputs.version, 'alpha') && !contains(needs.semantic-version.outputs.version, 'beta') && !contains(needs.semantic-version.outputs.version, 'rc')
+  # publish-crate:
+  #   name: Publish to crates.io
+  #   needs: [semantic-version, create-release, build-release, build-universal-macos]
+  #   runs-on: ubuntu-latest
+  #   if: needs.semantic-version.outputs.changed == 'true' && github.event_name == 'push' && !contains(needs.semantic-version.outputs.version, 'alpha') && !contains(needs.semantic-version.outputs.version, 'beta') && !contains(needs.semantic-version.outputs.version, 'rc')
 
+  #   steps:
+  #     - name: Checkout code
+  #       uses: actions/checkout@v5
+  #       with:
+  #         ref: main
+  #         fetch-depth: 1
+
+  #     - name: Pull latest changes
+  #       run: git pull origin main
+
+  #     - name: Install Rust
+  #       uses: dtolnay/rust-toolchain@stable
+
+  #     - name: Cache dependencies
+  #       uses: Swatinem/rust-cache@v2
+
+  #     - name: Publish to crates.io
+  #       run: cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+  docker-release:
+    name: Build and Push Docker Image
+    needs: [semantic-version, create-release]
+    runs-on: ubuntu-latest
+    if: needs.semantic-version.outputs.changed == 'true' && github.event_name == 'push'
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
         with:
           ref: main
           fetch-depth: 1
@@ -269,82 +292,59 @@ jobs:
       - name: Pull latest changes
         run: git pull origin main
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-      - name: Cache dependencies
-        uses: Swatinem/rust-cache@v2
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Publish to crates.io
-        run: cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
-  docker-release:
-    name: Build and Push Docker Image
-    needs: [semantic-version, create-release]
-    runs-on: ubuntu-latest
-    if: needs.semantic-version.outputs.changed == 'true' && github.event_name == 'push'
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        ref: main
-        fetch-depth: 1
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Pull latest changes
-      run: git pull origin main
+      - name: Extract metadata for 0.x versions
+        id: meta-prerelease
+        if: startsWith(needs.semantic-version.outputs.version, '0.')
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ${{ secrets.DOCKER_USERNAME }}/repos
+            ghcr.io/${{ github.repository }}
+          tags: |
+            type=semver,pattern={{version}},value=${{ needs.semantic-version.outputs.version }}
+            type=raw,value=latest
 
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
+      - name: Extract metadata for 1.x+ versions
+        id: meta-stable
+        if: "!startsWith(needs.semantic-version.outputs.version, '0.')"
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ${{ secrets.DOCKER_USERNAME }}/repos
+            ghcr.io/${{ github.repository }}
+          tags: |
+            type=semver,pattern={{version}},value=${{ needs.semantic-version.outputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ needs.semantic-version.outputs.version }}
+            type=semver,pattern={{major}},value=${{ needs.semantic-version.outputs.version }}
+            type=raw,value=latest
 
-    - name: Log in to Docker Hub
-      uses: docker/login-action@v3
-      with:
-        username: ${{ secrets.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_PASSWORD }}
-
-    - name: Log in to GitHub Container Registry
-      uses: docker/login-action@v3
-      with:
-        registry: ghcr.io
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-
-    - name: Extract metadata for 0.x versions
-      id: meta-prerelease
-      if: startsWith(needs.semantic-version.outputs.version, '0.')
-      uses: docker/metadata-action@v5
-      with:
-        images: |
-          ${{ secrets.DOCKER_USERNAME }}/repos
-          ghcr.io/${{ github.repository }}
-        tags: |
-          type=semver,pattern={{version}},value=${{ needs.semantic-version.outputs.version }}
-          type=raw,value=latest
-
-    - name: Extract metadata for 1.x+ versions
-      id: meta-stable
-      if: "!startsWith(needs.semantic-version.outputs.version, '0.')"
-      uses: docker/metadata-action@v5
-      with:
-        images: |
-          ${{ secrets.DOCKER_USERNAME }}/repos
-          ghcr.io/${{ github.repository }}
-        tags: |
-          type=semver,pattern={{version}},value=${{ needs.semantic-version.outputs.version }}
-          type=semver,pattern={{major}}.{{minor}},value=${{ needs.semantic-version.outputs.version }}
-          type=semver,pattern={{major}},value=${{ needs.semantic-version.outputs.version }}
-          type=raw,value=latest
-
-    - name: Build and push Docker image
-      uses: docker/build-push-action@v5
-      with:
-        context: .
-        platforms: linux/amd64,linux/arm64
-        push: true
-        tags: ${{ steps.meta-prerelease.outputs.tags || steps.meta-stable.outputs.tags }}
-        labels: ${{ steps.meta-prerelease.outputs.labels || steps.meta-stable.outputs.labels }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
-        provenance: false
-        sbom: false
-        build-args: |
-          VERSION=${{ needs.semantic-version.outputs.version }}
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta-prerelease.outputs.tags || steps.meta-stable.outputs.tags }}
+          labels: ${{ steps.meta-prerelease.outputs.labels || steps.meta-stable.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: false
+          sbom: false
+          build-args: |
+            VERSION=${{ needs.semantic-version.outputs.version }}
