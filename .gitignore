@@ -26,3 +26,4 @@ Thumbs.db
 
 # Project specific
 cloned_repos*/
+coverage/
