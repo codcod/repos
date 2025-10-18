@@ -6,7 +6,7 @@ pub mod client;
 pub mod types;
 
 // Re-export commonly used items for convenience
-pub use api::create_pull_request;
+pub use api::create_pr_from_workspace;
 pub use auth::GitHubAuth;
 pub use client::GitHubClient;
 pub use types::{PrOptions, PullRequestParams};

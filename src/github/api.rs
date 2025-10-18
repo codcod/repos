@@ -9,8 +9,13 @@ use anyhow::Result;
 use colored::*;
 use uuid::Uuid;
 
-/// Create a pull request for a repository
-pub async fn create_pull_request(repo: &Repository, options: &PrOptions) -> Result<()> {
+/// High-level function to create a PR from local changes
+///
+/// This function encapsulates the entire pull request creation flow:
+/// 1. Check for changes in the workspace
+/// 2. Create branch, add, commit, and push changes
+/// 3. Create GitHub PR via API
+pub async fn create_pr_from_workspace(repo: &Repository, options: &PrOptions) -> Result<()> {
     let repo_path = repo.get_target_dir();
 
     // Check if repository has changes

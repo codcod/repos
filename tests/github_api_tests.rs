@@ -1,7 +1,7 @@
 //! GitHub API tests focusing on PR creation functionality
 
 use repos::config::Repository;
-use repos::github::api::create_pull_request;
+use repos::github::api::create_pr_from_workspace;
 use repos::github::types::PrOptions;
 use std::fs;
 use std::path::PathBuf;
@@ -54,7 +54,7 @@ async fn test_create_pull_request_no_changes() {
     );
 
     // Should succeed with no changes (just prints a message and returns Ok)
-    let result = create_pull_request(&repo, &options).await;
+    let result = create_pr_from_workspace(&repo, &options).await;
     assert!(result.is_ok());
 }
 
