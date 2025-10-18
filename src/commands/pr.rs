@@ -70,7 +70,7 @@ impl Command for PrCommand {
                     async move {
                         (
                             repo.name.clone(),
-                            github::create_pull_request(&repo, &pr_options).await,
+                            github::create_pr_from_workspace(&repo, &pr_options).await,
                         )
                     }
                 })
@@ -88,7 +88,7 @@ impl Command for PrCommand {
             }
         } else {
             for repo in repositories {
-                match github::create_pull_request(&repo, &pr_options).await {
+                match github::create_pr_from_workspace(&repo, &pr_options).await {
                     Ok(_) => successful += 1,
                     Err(e) => {
                         eprintln!(
