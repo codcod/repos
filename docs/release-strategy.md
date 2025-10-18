@@ -12,7 +12,9 @@ Instead of creating individual releases for each feature or fix, we use release 
 
 - Develop features and fixes on feature branches as usual
 - Merge approved changes to `main` branch
-- No releases are automatically created from `main` branch commits
+- The workflow runs tests on `main` branch commits for validation
+- **No releases are automatically created from `main` branch commits**
+- Releases are only created from `release/**` branches
 
 ### 2. Release Preparation
 
@@ -88,12 +90,23 @@ To ensure proper semantic versioning, use conventional commit format:
 
 ## Workflow Configuration
 
-The release workflow (`/.github/workflows/release.yml`) is configured with:
+The project uses separate workflows for continuous integration and deployment:
 
-- **`bump_each_commit: false`**: Only increment version once per release
-- **`search_commit_body: true`**: Look for breaking changes in commit bodies
-- **Release branch triggers**: Automatically trigger on `release/*` branches
-- **Manual dispatch**: Allow manual release creation
+### CI Workflow (`/.github/workflows/ci.yml`)
+
+- **Triggers**: All pushes and pull requests to `main`
+- **Purpose**: Continuous integration testing and validation
+- **Actions**: Run tests, clippy, and formatting checks on multiple Rust versions
+
+### Release Workflow (`/.github/workflows/release.yml`)
+
+- **Triggers**: Pushes to `release/**` branches and manual dispatch
+- **Purpose**: Continuous deployment and release creation
+- **Configuration**:
+  - **`bump_each_commit: false`**: Only increment version once per release
+  - **`search_commit_body: true`**: Look for breaking changes in commit bodies
+  - **Release branch triggers**: Automatically trigger on `release/*` branches
+  - **Manual dispatch**: Allow manual release creation
 
 ## Benefits
 
