@@ -10,7 +10,6 @@ on:
       - 'Cargo.lock'
   pull_request:
     branches:
-      - main
       - 'release/**'
     paths:
       - 'src/**'
