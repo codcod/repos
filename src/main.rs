@@ -134,6 +134,10 @@ enum Commands {
         /// Overwrite existing file if it exists
         #[arg(long)]
         overwrite: bool,
+
+        /// Supplement existing config with newly discovered repositories
+        #[arg(long)]
+        supplement: bool,
     },
 }
 
@@ -233,7 +237,11 @@ async fn main() -> Result<()> {
             };
             RemoveCommand.execute(&context).await?;
         }
-        Commands::Init { output, overwrite } => {
+        Commands::Init {
+            output,
+            overwrite,
+            supplement,
+        } => {
             // Init command doesn't need config since it creates one
             let context = CommandContext {
                 config: Config::new(),
@@ -241,7 +249,13 @@ async fn main() -> Result<()> {
                 parallel: false,
                 repos: None,
             };
-            InitCommand { output, overwrite }.execute(&context).await?;
+            InitCommand {
+                output,
+                overwrite,
+                supplement,
+            }
+            .execute(&context)
+            .await?;
         }
     }
 
