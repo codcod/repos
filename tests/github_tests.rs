@@ -12,7 +12,7 @@ async fn test_create_pr_from_workspace_with_changes_success_flow() {
 
     // Initialize git repo
     let output = std::process::Command::new("git")
-        .args(&["init"])
+        .args(["init"])
         .current_dir(&repo_path)
         .output()
         .expect("git init failed");
@@ -20,13 +20,13 @@ async fn test_create_pr_from_workspace_with_changes_success_flow() {
 
     // Set git config for testing
     std::process::Command::new("git")
-        .args(&["config", "user.email", "test@example.com"])
+        .args(["config", "user.email", "test@example.com"])
         .current_dir(&repo_path)
         .output()
         .expect("git config email failed");
 
     std::process::Command::new("git")
-        .args(&["config", "user.name", "Test User"])
+        .args(["config", "user.name", "Test User"])
         .current_dir(&repo_path)
         .output()
         .expect("git config name failed");
@@ -36,13 +36,13 @@ async fn test_create_pr_from_workspace_with_changes_success_flow() {
 
     // Add and commit initial file
     std::process::Command::new("git")
-        .args(&["add", "."])
+        .args(["add", "."])
         .current_dir(&repo_path)
         .output()
         .expect("git add failed");
 
     std::process::Command::new("git")
-        .args(&["commit", "-m", "Initial commit"])
+        .args(["commit", "-m", "Initial commit"])
         .current_dir(&repo_path)
         .output()
         .expect("git commit failed");
@@ -74,7 +74,7 @@ async fn test_create_pr_from_workspace_with_changes_success_flow() {
 
     // Verify branch was created
     let output = std::process::Command::new("git")
-        .args(&["branch", "--list"])
+        .args(["branch", "--list"])
         .current_dir(&repo_path)
         .output()
         .expect("git branch failed");
@@ -92,7 +92,7 @@ async fn test_create_pr_workspace_no_changes_early_return() {
 
     // Initialize git repo
     let output = std::process::Command::new("git")
-        .args(&["init"])
+        .args(["init"])
         .current_dir(&repo_path)
         .output()
         .expect("git init failed");
@@ -100,13 +100,13 @@ async fn test_create_pr_workspace_no_changes_early_return() {
 
     // Set git config
     std::process::Command::new("git")
-        .args(&["config", "user.email", "test@example.com"])
+        .args(["config", "user.email", "test@example.com"])
         .current_dir(&repo_path)
         .output()
         .expect("git config email failed");
 
     std::process::Command::new("git")
-        .args(&["config", "user.name", "Test User"])
+        .args(["config", "user.name", "Test User"])
         .current_dir(&repo_path)
         .output()
         .expect("git config name failed");
@@ -114,13 +114,13 @@ async fn test_create_pr_workspace_no_changes_early_return() {
     // Create and commit initial file to have a clean repo
     fs::write(repo_path.join("initial.txt"), "initial").unwrap();
     std::process::Command::new("git")
-        .args(&["add", "."])
+        .args(["add", "."])
         .current_dir(&repo_path)
         .output()
         .expect("git add failed");
 
     std::process::Command::new("git")
-        .args(&["commit", "-m", "Initial commit"])
+        .args(["commit", "-m", "Initial commit"])
         .current_dir(&repo_path)
         .output()
         .expect("git commit failed");
@@ -153,20 +153,20 @@ async fn test_create_pr_workspace_commit_message_fallback() {
 
     // Initialize git repo
     std::process::Command::new("git")
-        .args(&["init"])
+        .args(["init"])
         .current_dir(&repo_path)
         .output()
         .expect("git init failed");
 
     // Set git config
     std::process::Command::new("git")
-        .args(&["config", "user.email", "test@example.com"])
+        .args(["config", "user.email", "test@example.com"])
         .current_dir(&repo_path)
         .output()
         .expect("git config email failed");
 
     std::process::Command::new("git")
-        .args(&["config", "user.name", "Test User"])
+        .args(["config", "user.name", "Test User"])
         .current_dir(&repo_path)
         .output()
         .expect("git config name failed");
@@ -174,13 +174,13 @@ async fn test_create_pr_workspace_commit_message_fallback() {
     // Create initial commit
     fs::write(repo_path.join("initial.txt"), "initial").unwrap();
     std::process::Command::new("git")
-        .args(&["add", "."])
+        .args(["add", "."])
         .current_dir(&repo_path)
         .output()
         .expect("git add failed");
 
     std::process::Command::new("git")
-        .args(&["commit", "-m", "Initial commit"])
+        .args(["commit", "-m", "Initial commit"])
         .current_dir(&repo_path)
         .output()
         .expect("git commit failed");
@@ -211,7 +211,7 @@ async fn test_create_pr_workspace_commit_message_fallback() {
 
     // Check that the commit was made with the title
     let output = std::process::Command::new("git")
-        .args(&["log", "-1", "--pretty=format:%s"])
+        .args(["log", "-1", "--pretty=format:%s"])
         .current_dir(&repo_path)
         .output()
         .expect("git log failed");
@@ -228,20 +228,20 @@ async fn test_create_pr_workspace_branch_name_generation() {
 
     // Initialize git repo
     std::process::Command::new("git")
-        .args(&["init"])
+        .args(["init"])
         .current_dir(&repo_path)
         .output()
         .expect("git init failed");
 
     // Set git config
     std::process::Command::new("git")
-        .args(&["config", "user.email", "test@example.com"])
+        .args(["config", "user.email", "test@example.com"])
         .current_dir(&repo_path)
         .output()
         .expect("git config email failed");
 
     std::process::Command::new("git")
-        .args(&["config", "user.name", "Test User"])
+        .args(["config", "user.name", "Test User"])
         .current_dir(&repo_path)
         .output()
         .expect("git config name failed");
@@ -249,13 +249,13 @@ async fn test_create_pr_workspace_branch_name_generation() {
     // Create initial commit
     fs::write(repo_path.join("initial.txt"), "initial").unwrap();
     std::process::Command::new("git")
-        .args(&["add", "."])
+        .args(["add", "."])
         .current_dir(&repo_path)
         .output()
         .expect("git add failed");
 
     std::process::Command::new("git")
-        .args(&["commit", "-m", "Initial commit"])
+        .args(["commit", "-m", "Initial commit"])
         .current_dir(&repo_path)
         .output()
         .expect("git commit failed");
@@ -285,7 +285,7 @@ async fn test_create_pr_workspace_branch_name_generation() {
 
     // Verify a feature branch was created
     let output = std::process::Command::new("git")
-        .args(&["branch", "--list"])
+        .args(["branch", "--list"])
         .current_dir(&repo_path)
         .output()
         .expect("git branch failed");
@@ -333,20 +333,20 @@ async fn test_create_pr_workspace_custom_branch_and_commit() {
 
     // Initialize git repo
     std::process::Command::new("git")
-        .args(&["init"])
+        .args(["init"])
         .current_dir(&repo_path)
         .output()
         .expect("git init failed");
 
     // Set git config
     std::process::Command::new("git")
-        .args(&["config", "user.email", "test@example.com"])
+        .args(["config", "user.email", "test@example.com"])
         .current_dir(&repo_path)
         .output()
         .expect("git config email failed");
 
     std::process::Command::new("git")
-        .args(&["config", "user.name", "Test User"])
+        .args(["config", "user.name", "Test User"])
         .current_dir(&repo_path)
         .output()
         .expect("git config name failed");
@@ -354,13 +354,13 @@ async fn test_create_pr_workspace_custom_branch_and_commit() {
     // Create initial commit
     fs::write(repo_path.join("initial.txt"), "initial").unwrap();
     std::process::Command::new("git")
-        .args(&["add", "."])
+        .args(["add", "."])
         .current_dir(&repo_path)
         .output()
         .expect("git add failed");
 
     std::process::Command::new("git")
-        .args(&["commit", "-m", "Initial commit"])
+        .args(["commit", "-m", "Initial commit"])
         .current_dir(&repo_path)
         .output()
         .expect("git commit failed");
@@ -392,7 +392,7 @@ async fn test_create_pr_workspace_custom_branch_and_commit() {
 
     // Verify custom branch was created
     let output = std::process::Command::new("git")
-        .args(&["branch", "--list"])
+        .args(["branch", "--list"])
         .current_dir(&repo_path)
         .output()
         .expect("git branch failed");
@@ -402,7 +402,7 @@ async fn test_create_pr_workspace_custom_branch_and_commit() {
 
     // Verify custom commit message was used
     let output = std::process::Command::new("git")
-        .args(&["log", "-1", "--pretty=format:%s"])
+        .args(["log", "-1", "--pretty=format:%s"])
         .current_dir(&repo_path)
         .output()
         .expect("git log failed");
