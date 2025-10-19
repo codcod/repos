@@ -35,9 +35,37 @@ impl Config {
     pub fn save(&self, path: &str) -> Result<()> {
         let yaml = serde_yaml::to_string(self)?;
 
-        std::fs::write(path, yaml)?;
+        // Fix indentation for yamllint compliance
+        // yamllint expects array items to be indented relative to their parent
+        let fixed_yaml = Self::fix_yaml_indentation(&yaml);
+
+        // Make yamllint compliant by adding document separator and ensuring newline at end
+        let yaml_content = format!("---\n{}\n", fixed_yaml);
+
+        std::fs::write(path, yaml_content)?;
 
         Ok(())
+    }
+
+    /// Fix YAML indentation to be yamllint compliant
+    fn fix_yaml_indentation(yaml: &str) -> String {
+        let lines: Vec<&str> = yaml.lines().collect();
+        let mut result = Vec::new();
+
+        for line in lines {
+            // If line starts with a dash (array item), indent it by 2 spaces
+            if line.starts_with("- ") {
+                result.push(format!("  {}", line));
+            } else if line.starts_with("  ") && !line.starts_with("    ") {
+                // If line is already indented by 2 spaces but not 4, make it 4 spaces
+                // This handles the properties of array items
+                result.push(format!("  {}", line));
+            } else {
+                result.push(line.to_string());
+            }
+        }
+
+        result.join("\n")
     }
 
     /// Filter repositories by specific names
