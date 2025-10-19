@@ -12,21 +12,29 @@ use walkdir::WalkDir;
 pub struct InitCommand {
     pub output: String,
     pub overwrite: bool,
+    pub supplement: bool,
 }
 
 #[async_trait]
 impl Command for InitCommand {
     async fn execute(&self, _context: &CommandContext) -> Result<()> {
-        if Path::new(&self.output).exists() && !self.overwrite {
-            return Err(anyhow::anyhow!(
-                "Output file '{}' already exists. Use --overwrite to replace it.",
-                self.output
-            ));
-        }
+        // Load existing config if supplementing, otherwise check for overwrite
+        let mut existing_config = if self.supplement && Path::new(&self.output).exists() {
+            println!("{}", "Loading existing configuration...".green());
+            Config::load(&self.output)?
+        } else {
+            if Path::new(&self.output).exists() && !self.overwrite {
+                return Err(anyhow::anyhow!(
+                    "Output file '{}' already exists. Use --overwrite to replace it or --supplement to add new repositories.",
+                    self.output
+                ));
+            }
+            Config::new()
+        };
 
         println!("{}", "Discovering Git repositories...".green());
 
-        let mut repositories = Vec::new();
+        let mut discovered_repositories = Vec::new();
         let current_dir = std::env::current_dir()?;
 
         for entry in WalkDir::new(&current_dir)
@@ -50,31 +58,80 @@ impl Command for InitCommand {
                                 .to_string(),
                         )
                         .build();
-                    repositories.push(repo);
+                    discovered_repositories.push(repo);
                 }
             }
         }
 
-        if repositories.is_empty() {
+        if discovered_repositories.is_empty() {
             println!(
                 "{}",
                 "No Git repositories found in current directory".yellow()
             );
-            return Ok(());
+            if !self.supplement {
+                return Ok(());
+            }
         }
 
-        println!(
-            "{}",
-            format!("Found {} repositories", repositories.len()).green()
-        );
+        let mut added_count = 0;
+        let has_existing_config = Path::new(&self.output).exists();
 
-        let config = Config { repositories };
-        config.save(&self.output)?;
+        if self.supplement {
+            // Add only new repositories (not already in config)
+            for repo in discovered_repositories {
+                if existing_config.get_repository(&repo.name).is_none() {
+                    existing_config.add_repository(repo)?;
+                    added_count += 1;
+                } else {
+                    println!(
+                        "{}",
+                        format!(
+                            "Repository '{}' already exists in config, skipping",
+                            repo.name
+                        )
+                        .yellow()
+                    );
+                }
+            }
 
-        println!(
-            "{}",
-            format!("Configuration saved to '{}'", self.output).green()
-        );
+            if added_count > 0 {
+                println!(
+                    "{}",
+                    format!("Added {} new repositories to existing config", added_count).green()
+                );
+            } else {
+                println!("{}", "No new repositories found to add".yellow());
+            }
+
+            // Only save if we have new repositories to add or if config already existed
+            if added_count > 0 || has_existing_config {
+                existing_config.save(&self.output)?;
+
+                if added_count > 0 {
+                    println!(
+                        "{}",
+                        format!(
+                            "Configuration updated with {} new repositories in '{}'",
+                            added_count, self.output
+                        )
+                        .green()
+                    );
+                }
+            }
+        } else {
+            // Replace mode - use all discovered repositories
+            existing_config.repositories = discovered_repositories;
+            println!(
+                "{}",
+                format!("Found {} repositories", existing_config.repositories.len()).green()
+            );
+
+            existing_config.save(&self.output)?;
+            println!(
+                "{}",
+                format!("Configuration saved to '{}'", self.output).green()
+            );
+        }
 
         Ok(())
     }
@@ -114,6 +171,7 @@ mod tests {
         let command = InitCommand {
             output: output_path.to_string_lossy().to_string(),
             overwrite: false,
+            supplement: false,
         };
 
         let context = CommandContext {
@@ -146,6 +204,7 @@ mod tests {
         let command = InitCommand {
             output: output_path.to_string_lossy().to_string(),
             overwrite: false, // Should not overwrite
+            supplement: false,
         };
 
         let context = CommandContext {
@@ -172,9 +231,93 @@ mod tests {
         let command = InitCommand {
             output: "test.yaml".to_string(),
             overwrite: true,
+            supplement: false,
         };
 
         assert_eq!(command.output, "test.yaml");
         assert!(command.overwrite);
+        assert!(!command.supplement);
+    }
+
+    #[tokio::test]
+    async fn test_init_command_supplement_with_existing_config() {
+        let temp_dir = TempDir::new().unwrap();
+        let output_path = temp_dir.path().join("existing-config.yaml");
+
+        // Create existing config with one repository
+        let existing_config = Config {
+            repositories: vec![crate::config::Repository::new(
+                "existing-repo".to_string(),
+                "git@github.com:owner/existing-repo.git".to_string(),
+            )],
+        };
+        existing_config
+            .save(&output_path.to_string_lossy())
+            .unwrap();
+
+        let original_dir = std::env::current_dir().unwrap();
+
+        // Change to temp directory (empty, no git repos)
+        std::env::set_current_dir(temp_dir.path()).unwrap();
+
+        let command = InitCommand {
+            output: output_path.to_string_lossy().to_string(),
+            overwrite: false,
+            supplement: true, // Should supplement existing config
+        };
+
+        let context = CommandContext {
+            config: Config {
+                repositories: vec![],
+            },
+            tag: None,
+            repos: None,
+            parallel: false,
+        };
+
+        let result = command.execute(&context).await;
+        assert!(result.is_ok()); // Should succeed
+
+        // Verify config still contains the existing repository
+        let updated_config = Config::load(&output_path.to_string_lossy()).unwrap();
+        assert_eq!(updated_config.repositories.len(), 1);
+        assert_eq!(updated_config.repositories[0].name, "existing-repo");
+
+        // Restore original directory
+        std::env::set_current_dir(original_dir).unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_init_command_supplement_without_existing_config() {
+        let temp_dir = TempDir::new().unwrap();
+        let output_path = temp_dir.path().join("new-config.yaml");
+        let original_dir = std::env::current_dir().unwrap();
+
+        // Change to temp directory (empty, no git repos)
+        std::env::set_current_dir(temp_dir.path()).unwrap();
+
+        let command = InitCommand {
+            output: output_path.to_string_lossy().to_string(),
+            overwrite: false,
+            supplement: true, // Should create new config since none exists
+        };
+
+        let context = CommandContext {
+            config: Config {
+                repositories: vec![],
+            },
+            tag: None,
+            repos: None,
+            parallel: false,
+        };
+
+        let result = command.execute(&context).await;
+        assert!(result.is_ok()); // Should succeed
+
+        // Verify no config file was created (no repos found)
+        assert!(!output_path.exists());
+
+        // Restore original directory
+        std::env::set_current_dir(original_dir).unwrap();
     }
 }
