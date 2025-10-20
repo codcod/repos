@@ -29,6 +29,6 @@ pub mod config {
     /// Default configuration file name
     pub const DEFAULT_CONFIG_FILE: &str = "config.yaml";
 
-    /// Default logs directory
-    pub const DEFAULT_LOGS_DIR: &str = "logs";
+    /// Default output directory
+    pub const DEFAULT_LOGS_DIR: &str = "output";
 }

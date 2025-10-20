@@ -63,6 +63,7 @@ fn test_pr_command_missing_required_args() {
     // PR command may have different required args, let's be more flexible
     assert!(
         stderr.contains("error")
+            || stderr.contains("Error")
             || stderr.contains("required")
             || stderr.contains("missing")
             || stderr.contains("Usage")

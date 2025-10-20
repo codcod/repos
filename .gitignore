@@ -27,3 +27,6 @@ Thumbs.db
 # Project specific
 cloned_repos*/
 coverage/
+logs/
+config.yaml
+tarpaulin-report.html
