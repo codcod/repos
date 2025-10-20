@@ -3,14 +3,10 @@
 use crate::config::Repository;
 use crate::git::Logger;
 use anyhow::Result;
-use chrono::Utc;
-use colored::*;
-use std::fs::{File, create_dir_all};
-use std::io::{BufRead, BufReader, Write};
+
+use std::io::{BufRead, BufReader};
 use std::path::Path;
 use std::process::{Command, Stdio};
-use std::sync::Arc;
-use tokio::sync::Mutex;
 
 #[derive(Default)]
 pub struct CommandRunner {
@@ -22,12 +18,36 @@ impl CommandRunner {
         Self::default()
     }
 
-    pub async fn run_command(
+    /// Run command and capture output for the new logging system
+    pub async fn run_command_with_capture(
         &self,
         repo: &Repository,
         command: &str,
         log_dir: Option<&str>,
-    ) -> Result<()> {
+    ) -> Result<(String, String, i32)> {
+        self.run_command_with_capture_internal(repo, command, log_dir, false)
+            .await
+    }
+
+    /// Run command and capture output without creating log files (for persist mode)
+    pub async fn run_command_with_capture_no_logs(
+        &self,
+        repo: &Repository,
+        command: &str,
+        log_dir: Option<&str>,
+    ) -> Result<(String, String, i32)> {
+        self.run_command_with_capture_internal(repo, command, log_dir, true)
+            .await
+    }
+
+    /// Internal implementation that allows skipping log file creation
+    async fn run_command_with_capture_internal(
+        &self,
+        repo: &Repository,
+        command: &str,
+        _log_dir: Option<&str>,
+        _skip_log_file: bool,
+    ) -> Result<(String, String, i32)> {
         let repo_dir = repo.get_target_dir();
 
         // Check if directory exists
@@ -35,13 +55,7 @@ impl CommandRunner {
             anyhow::bail!("Repository directory does not exist: {}", repo_dir);
         }
 
-        // Prepare log file if log directory is specified
-        let log_file = if let Some(log_dir) = log_dir {
-            Some(self.prepare_log_file(repo, log_dir, command, &repo_dir)?)
-        } else {
-            None
-        };
-
+        // No longer create log files - all output handled by persist system
         self.logger.info(repo, &format!("Running '{command}'"));
 
         // Execute command
@@ -56,64 +70,71 @@ impl CommandRunner {
         let stdout = cmd.stdout.take().unwrap();
         let stderr = cmd.stderr.take().unwrap();
 
-        let log_file = Arc::new(Mutex::new(log_file));
-        let repo_name = repo.name.clone();
-
         // Handle stdout
-        let stdout_log_file = Arc::clone(&log_file);
-        let stdout_repo_name = repo_name.clone();
         let stdout_handle = tokio::spawn(async move {
             let reader = BufReader::new(stdout);
-            // Note: We explicitly handle Result instead of using .flatten()
-            // to avoid infinite loops on repeated I/O errors
+            let mut content = String::new();
             #[allow(clippy::manual_flatten)]
             for line in reader.lines() {
                 if let Ok(line) = line {
-                    // Print to console with colored repo name
-                    println!("{} | {line}", stdout_repo_name.cyan());
-
-                    // Write to log file if available
-                    if let Some(ref mut log_file) = *stdout_log_file.lock().await {
-                        writeln!(log_file, "{stdout_repo_name} | {line}").ok();
-                        log_file.flush().ok();
-                    }
+                    content.push_str(&line);
+                    content.push('\n');
                 }
             }
+            content
         });
 
         // Handle stderr
-        let stderr_log_file = Arc::clone(&log_file);
-        let stderr_repo_name = repo_name.clone();
         let stderr_handle = tokio::spawn(async move {
             let reader = BufReader::new(stderr);
-            let mut header_written = false;
+            let mut content = String::new();
 
-            // Note: We explicitly handle Result instead of using .flatten()
-            // to avoid infinite loops on repeated I/O errors
             #[allow(clippy::manual_flatten)]
             for line in reader.lines() {
                 if let Ok(line) = line {
-                    // Print to console with colored repo name
-                    eprintln!("{} | {line}", stderr_repo_name.red().bold());
-
-                    // Write to log file if available
-                    if let Some(ref mut log_file) = *stderr_log_file.lock().await {
-                        if !header_written {
-                            writeln!(log_file, "\n=== STDERR ===").ok();
-                            header_written = true;
-                        }
-                        writeln!(log_file, "{stderr_repo_name} | {line}").ok();
-                        log_file.flush().ok();
-                    }
+                    content.push_str(&line);
+                    content.push('\n');
                 }
             }
+            content
         });
 
-        // Wait for output processing to complete
-        let _ = tokio::join!(stdout_handle, stderr_handle);
+        // Wait for output processing to complete and capture content
+        let (stdout_result, stderr_result) = tokio::join!(stdout_handle, stderr_handle);
+        let stdout_content = stdout_result.unwrap_or_default();
+        let stderr_content = stderr_result.unwrap_or_default();
 
         // Wait for command to complete
         let status = cmd.wait()?;
+        let exit_code = status.code().unwrap_or(-1);
+
+        // Always return the captured output, regardless of exit code
+        // This allows the caller to decide how to handle failures and still log the output
+        Ok((stdout_content, stderr_content, exit_code))
+    }
+
+    pub async fn run_command(
+        &self,
+        repo: &Repository,
+        command: &str,
+        _log_dir: Option<&str>,
+    ) -> Result<()> {
+        let repo_dir = repo.get_target_dir();
+
+        // Check if directory exists
+        if !Path::new(&repo_dir).exists() {
+            anyhow::bail!("Repository directory does not exist: {}", repo_dir);
+        }
+
+        // No longer create log files - all output is handled by the new persist system
+        self.logger.info(repo, &format!("Running '{command}'"));
+
+        // Execute command
+        let status = Command::new("sh")
+            .arg("-c")
+            .arg(command)
+            .current_dir(&repo_dir)
+            .status()?;
 
         if !status.success() {
             anyhow::bail!(
@@ -123,31 +144,6 @@ impl CommandRunner {
         }
 
         Ok(())
-    }
-
-    fn prepare_log_file(
-        &self,
-        repo: &Repository,
-        log_dir: &str,
-        command: &str,
-        repo_dir: &str,
-    ) -> Result<File> {
-        // Create log directory if it doesn't exist
-        create_dir_all(log_dir)?;
-
-        let timestamp = Utc::now().format("%Y%m%d_%H%M%S");
-        let log_file_path = format!("{}/{}_{}.log", log_dir, repo.name, timestamp);
-
-        let mut log_file = File::create(&log_file_path)?;
-
-        // Write header information
-        writeln!(log_file, "Repository: {}", repo.name)?;
-        writeln!(log_file, "Command: {command}")?;
-        writeln!(log_file, "Directory: {repo_dir}")?;
-        writeln!(log_file, "Timestamp: {}", Utc::now().to_rfc3339())?;
-        writeln!(log_file, "\n=== STDOUT ===")?;
-
-        Ok(log_file)
     }
 }
 
@@ -303,12 +299,20 @@ mod tests {
             .await;
         assert!(result.is_ok());
 
-        assert!(log_dir.exists());
-        let log_files: Vec<_> = fs::read_dir(&log_dir)
-            .unwrap()
-            .filter_map(Result::ok)
-            .collect();
-        assert!(!log_files.is_empty(), "Log file should have been created");
+        // No log files are created anymore - the persist system handles output capture
+        // The log_dir parameter is no longer used for file creation
+        let log_files: Vec<_> = if log_dir.exists() {
+            fs::read_dir(&log_dir)
+                .unwrap()
+                .filter_map(Result::ok)
+                .collect()
+        } else {
+            Vec::new()
+        };
+        assert!(
+            log_files.is_empty(),
+            "No log files should be created - use persist system instead"
+        );
     }
 
     #[tokio::test]
@@ -329,23 +333,19 @@ mod tests {
             .await;
         assert!(result.is_ok());
 
-        let log_file_path = fs::read_dir(&log_dir)
-            .unwrap()
-            .filter_map(Result::ok)
-            .next()
-            .expect("No log file found")
-            .path();
-
-        let log_content = fs::read_to_string(log_file_path).unwrap();
-
-        assert!(log_content.contains("Repository: test-log-content"));
-        assert!(log_content.contains("Command: echo 'stdout message'; echo 'stderr message' >&2"));
-        assert!(log_content.contains("Directory:"));
-        assert!(log_content.contains("Timestamp:"));
-        assert!(log_content.contains("=== STDOUT ==="));
-        assert!(log_content.contains("stdout message"));
-        assert!(log_content.contains("=== STDERR ==="));
-        assert!(log_content.contains("stderr message"));
+        // Verify no log files are created (we now use persist system instead)
+        let log_files: Vec<_> = if log_dir.exists() {
+            fs::read_dir(&log_dir)
+                .unwrap()
+                .filter_map(Result::ok)
+                .collect()
+        } else {
+            Vec::new()
+        };
+        assert!(
+            log_files.is_empty(),
+            "No log files should be created with new persist-only system"
+        );
     }
 
     #[tokio::test]
@@ -365,7 +365,8 @@ mod tests {
                 Some(&invalid_log_dir.to_string_lossy()),
             )
             .await;
-        assert!(result.is_err());
+        // Should succeed now since we don't create log files
+        assert!(result.is_ok());
     }
 
     #[tokio::test]
@@ -384,16 +385,16 @@ mod tests {
             .await;
         assert!(result.is_ok());
 
-        let log_file_path = fs::read_dir(&log_dir)
-            .unwrap()
-            .next()
-            .unwrap()
-            .unwrap()
-            .path();
-        let log_content = fs::read_to_string(log_file_path).unwrap();
-        assert!(log_content.contains("Line 1"));
-        assert!(log_content.contains("Line 50"));
-        assert!(log_content.contains("Line 100"));
+        // Verify no log files are created
+        let log_files: Vec<_> = if log_dir.exists() {
+            fs::read_dir(&log_dir)
+                .unwrap()
+                .filter_map(Result::ok)
+                .collect()
+        } else {
+            Vec::new()
+        };
+        assert!(log_files.is_empty(), "No log files should be created");
     }
 
     #[tokio::test]
@@ -414,18 +415,168 @@ mod tests {
             .await;
         assert!(result.is_ok());
 
-        let log_file_name = fs::read_dir(&log_dir)
-            .unwrap()
-            .next()
-            .unwrap()
-            .unwrap()
-            .file_name();
-        // The filename should be sanitized (dots become dashes, so "test-repo_with-special.chars" becomes something with dashes)
-        let filename = log_file_name.to_string_lossy();
+        // Verify no log files are created
+        let log_files: Vec<_> = if log_dir.exists() {
+            fs::read_dir(&log_dir)
+                .unwrap()
+                .filter_map(Result::ok)
+                .collect()
+        } else {
+            Vec::new()
+        };
+        assert!(log_files.is_empty(), "No log files should be created");
+    }
+
+    #[tokio::test]
+    async fn test_run_command_with_capture_success() {
+        let (repo, temp_dir) =
+            create_test_repo_with_git("test-capture", "git@github.com:owner/test.git");
+        let runner = CommandRunner::new();
+
+        let log_dir = temp_dir.path().join("logs");
+        let log_dir_str = log_dir.to_string_lossy().to_string();
+
+        let result = runner
+            .run_command_with_capture(&repo, "echo 'captured output'", Some(&log_dir_str))
+            .await;
+
+        assert!(result.is_ok());
+        let (stdout, stderr, exit_code) = result.unwrap();
+        assert!(stdout.contains("captured output"));
+        assert!(stderr.is_empty());
+        assert_eq!(exit_code, 0);
+    }
+
+    #[tokio::test]
+    async fn test_run_command_with_capture_stderr() {
+        let (repo, temp_dir) =
+            create_test_repo_with_git("test-capture-stderr", "git@github.com:owner/test.git");
+        let runner = CommandRunner::new();
+
+        let log_dir = temp_dir.path().join("logs");
+        let log_dir_str = log_dir.to_string_lossy().to_string();
+
+        let result = runner
+            .run_command_with_capture(&repo, "echo 'error message' >&2", Some(&log_dir_str))
+            .await;
+
+        assert!(result.is_ok());
+        let (stdout, stderr, exit_code) = result.unwrap();
+        assert!(stdout.is_empty());
+        assert!(stderr.contains("error message"));
+        assert_eq!(exit_code, 0);
+    }
+
+    #[tokio::test]
+    async fn test_run_command_with_capture_mixed_output() {
+        let (repo, temp_dir) =
+            create_test_repo_with_git("test-capture-mixed", "git@github.com:owner/test.git");
+        let runner = CommandRunner::new();
+
+        let log_dir = temp_dir.path().join("logs");
+        let log_dir_str = log_dir.to_string_lossy().to_string();
+
+        let result = runner
+            .run_command_with_capture(
+                &repo,
+                "echo 'stdout message' && echo 'stderr message' >&2",
+                Some(&log_dir_str),
+            )
+            .await;
+
+        assert!(result.is_ok());
+        let (stdout, stderr, exit_code) = result.unwrap();
+        assert!(stdout.contains("stdout message"));
+        assert!(stderr.contains("stderr message"));
+        assert_eq!(exit_code, 0);
+    }
+
+    #[tokio::test]
+    async fn test_run_command_with_capture_failure() {
+        let (repo, temp_dir) =
+            create_test_repo_with_git("test-capture-fail", "git@github.com:owner/test.git");
+        let runner = CommandRunner::new();
+
+        let log_dir = temp_dir.path().join("logs");
+        let log_dir_str = log_dir.to_string_lossy().to_string();
+
+        let result = runner
+            .run_command_with_capture(&repo, "exit 1", Some(&log_dir_str))
+            .await;
+
+        // Should return Ok with exit code 1 (failure is indicated by exit code, not error)
+        assert!(result.is_ok());
+        let (stdout, stderr, exit_code) = result.unwrap();
+        assert!(stdout.is_empty());
+        assert!(stderr.is_empty());
+        assert_eq!(exit_code, 1);
+    }
+
+    #[tokio::test]
+    async fn test_run_command_with_capture_no_log_dir() {
+        let (repo, _temp_dir) =
+            create_test_repo_with_git("test-capture-no-log", "git@github.com:owner/test.git");
+        let runner = CommandRunner::new();
+
+        let result = runner
+            .run_command_with_capture(&repo, "echo 'no log dir'", None)
+            .await;
+
+        assert!(result.is_ok());
+        let (stdout, stderr, exit_code) = result.unwrap();
+        assert!(stdout.contains("no log dir"));
+        assert!(stderr.is_empty());
+        assert_eq!(exit_code, 0);
+    }
+
+    #[tokio::test]
+    async fn test_run_command_with_capture_long_output() {
+        let (repo, temp_dir) =
+            create_test_repo_with_git("test-capture-long", "git@github.com:owner/test.git");
+        let runner = CommandRunner::new();
+
+        let log_dir = temp_dir.path().join("logs");
+        let log_dir_str = log_dir.to_string_lossy().to_string();
+
+        let result = runner
+            .run_command_with_capture(
+                &repo,
+                "for i in $(seq 1 50); do echo \"Line $i\"; done",
+                Some(&log_dir_str),
+            )
+            .await;
+
+        assert!(result.is_ok());
+        let (stdout, stderr, exit_code) = result.unwrap();
+        assert!(stdout.contains("Line 1"));
+        assert!(stdout.contains("Line 25"));
+        assert!(stdout.contains("Line 50"));
+        assert!(stderr.is_empty());
+        assert_eq!(exit_code, 0);
+    }
+
+    #[tokio::test]
+    async fn test_run_command_with_capture_nonexistent_directory() {
+        let repo = Repository {
+            name: "nonexistent-repo".to_string(),
+            url: "https://github.com/test/nonexistent".to_string(),
+            tags: vec!["test".to_string()],
+            path: Some("/nonexistent/path".to_string()),
+            branch: None,
+            config_dir: None,
+        };
+        let runner = CommandRunner::new();
+
+        let result = runner
+            .run_command_with_capture(&repo, "echo 'test'", None)
+            .await;
+
+        assert!(result.is_err());
         assert!(
-            filename.contains("test-repo")
-                && filename.contains("special")
-                && filename.contains("chars")
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Repository directory does not exist")
         );
     }
 }

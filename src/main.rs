@@ -1,7 +1,7 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use repos::{commands::*, config::Config, constants};
-use std::env;
+use std::{env, path::PathBuf};
 
 #[derive(Parser)]
 #[command(name = "repos")]
@@ -40,10 +40,6 @@ enum Commands {
         /// Specific repository names to run command in (if not provided, uses tag filter or all repos)
         repos: Vec<String>,
 
-        /// Directory to store log files
-        #[arg(short, long, default_value_t = constants::config::DEFAULT_LOGS_DIR.to_string())]
-        logs: String,
-
         /// Configuration file path
         #[arg(short, long, default_value_t = constants::config::DEFAULT_CONFIG_FILE.to_string())]
         config: String,
@@ -55,6 +51,14 @@ enum Commands {
         /// Execute operations in parallel
         #[arg(short, long)]
         parallel: bool,
+
+        /// Don't save command outputs to files
+        #[arg(long)]
+        no_save: bool,
+
+        /// Custom directory for output files (default: output)
+        #[arg(long)]
+        output_dir: Option<String>,
     },
 
     /// Create pull requests for repositories with changes
@@ -165,10 +169,11 @@ async fn main() -> Result<()> {
         Commands::Run {
             command,
             repos,
-            logs,
             config,
             tag,
             parallel,
+            no_save,
+            output_dir,
         } => {
             let config = Config::load_config(&config)?;
             let context = CommandContext {
@@ -179,7 +184,8 @@ async fn main() -> Result<()> {
             };
             RunCommand {
                 command,
-                log_dir: logs,
+                no_save,
+                output_dir: output_dir.map(PathBuf::from),
             }
             .execute(&context)
             .await?;

@@ -165,6 +165,19 @@ repos run -p "cargo test"
 
 # Specify a custom log directory
 repos run -l custom/logs "make build"
+
+# Default behavior (persistent logs)
+repos run "mvn compile"
+
+# Disable persistence
+repos run --no-save "echo test"
+
+# Custom log directory
+repos run --output-dir=/tmp/build-logs "gradle build"
+
+# Search logs
+grep -n "ClassNotFound" logs/runs/*/combined.out
+rg "BUILD FAILURE" logs/runs/
 ```
 
 #### Example commands

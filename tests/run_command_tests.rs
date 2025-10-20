@@ -63,7 +63,8 @@ async fn test_run_command_basic_execution() {
 
     let command = RunCommand {
         command: "echo hello".to_string(),
-        log_dir: log_dir.to_string_lossy().to_string(),
+        no_save: true,
+        output_dir: None,
     };
 
     let context = CommandContext {
@@ -107,7 +108,8 @@ async fn test_run_command_multiple_repositories() {
 
     let command = RunCommand {
         command: "pwd".to_string(),
-        log_dir: log_dir.to_string_lossy().to_string(),
+        no_save: true,
+        output_dir: None,
     };
 
     let context = CommandContext {
@@ -149,7 +151,8 @@ async fn test_run_command_parallel_execution() {
 
     let command = RunCommand {
         command: "echo parallel".to_string(),
-        log_dir: log_dir.to_string_lossy().to_string(),
+        no_save: true,
+        output_dir: None,
     };
 
     let context = CommandContext {
@@ -199,7 +202,8 @@ async fn test_run_command_with_tag_filter() {
 
     let command = RunCommand {
         command: "echo tagged".to_string(),
-        log_dir: log_dir.to_string_lossy().to_string(),
+        no_save: true,
+        output_dir: None,
     };
 
     let context = CommandContext {
@@ -250,7 +254,8 @@ async fn test_run_command_with_repo_filter() {
 
     let command = RunCommand {
         command: "echo filtered".to_string(),
-        log_dir: log_dir.to_string_lossy().to_string(),
+        no_save: true,
+        output_dir: None,
     };
 
     let context = CommandContext {
@@ -289,7 +294,8 @@ async fn test_run_command_no_matching_repositories() {
 
     let command = RunCommand {
         command: "echo test".to_string(),
-        log_dir: log_dir.to_string_lossy().to_string(),
+        no_save: true,
+        output_dir: None,
     };
 
     let context = CommandContext {
@@ -313,7 +319,8 @@ async fn test_run_command_empty_repositories() {
 
     let command = RunCommand {
         command: "echo test".to_string(),
-        log_dir: log_dir.to_string_lossy().to_string(),
+        no_save: true,
+        output_dir: None,
     };
 
     let context = CommandContext {
@@ -351,7 +358,8 @@ async fn test_run_command_complex_command() {
 
     let command = RunCommand {
         command: "git status && echo done".to_string(),
-        log_dir: log_dir.to_string_lossy().to_string(),
+        no_save: true,
+        output_dir: None,
     };
 
     let context = CommandContext {
@@ -389,7 +397,8 @@ async fn test_run_command_command_with_special_characters() {
 
     let command = RunCommand {
         command: "echo 'hello world' && echo \"quoted text\"".to_string(),
-        log_dir: log_dir.to_string_lossy().to_string(),
+        no_save: true,
+        output_dir: None,
     };
 
     let context = CommandContext {
@@ -441,7 +450,8 @@ async fn test_run_command_combined_filters() {
 
     let command = RunCommand {
         command: "echo combined".to_string(),
-        log_dir: log_dir.to_string_lossy().to_string(),
+        no_save: true,
+        output_dir: None,
     };
 
     let context = CommandContext {
