@@ -21,17 +21,31 @@ pub struct PrCommand {
 #[async_trait]
 impl Command for PrCommand {
     async fn execute(&self, context: &CommandContext) -> Result<()> {
-        let repositories = context
-            .config
-            .filter_repositories(context.tag.as_deref(), context.repos.as_deref());
+        let repositories = context.config.filter_repositories(
+            &context.tag,
+            &context.exclude_tag,
+            context.repos.as_deref(),
+        );
 
         if repositories.is_empty() {
-            let filter_desc = match (&context.tag, &context.repos) {
-                (Some(tag), Some(repos)) => format!("tag '{tag}' and repositories {repos:?}"),
-                (Some(tag), None) => format!("tag '{tag}'"),
-                (None, Some(repos)) => format!("repositories {repos:?}"),
-                (None, None) => "no repositories found".to_string(),
+            let mut filter_parts = Vec::new();
+
+            if !context.tag.is_empty() {
+                filter_parts.push(format!("tags {:?}", context.tag));
+            }
+            if !context.exclude_tag.is_empty() {
+                filter_parts.push(format!("excluding tags {:?}", context.exclude_tag));
+            }
+            if let Some(repos) = &context.repos {
+                filter_parts.push(format!("repositories {:?}", repos));
+            }
+
+            let filter_desc = if filter_parts.is_empty() {
+                "no repositories found".to_string()
+            } else {
+                filter_parts.join(" and ")
             };
+
             println!(
                 "{}",
                 format!("No repositories found with {filter_desc}").yellow()

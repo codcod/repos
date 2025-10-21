@@ -178,7 +178,8 @@ mod tests {
             config: Config {
                 repositories: vec![],
             },
-            tag: None,
+            tag: vec![],
+            exclude_tag: vec![],
             repos: None,
             parallel: false,
         };
@@ -211,7 +212,8 @@ mod tests {
             config: Config {
                 repositories: vec![],
             },
-            tag: None,
+            tag: vec![],
+            exclude_tag: vec![],
             repos: None,
             parallel: false,
         };
@@ -270,7 +272,8 @@ mod tests {
             config: Config {
                 repositories: vec![],
             },
-            tag: None,
+            tag: vec![],
+            exclude_tag: vec![],
             repos: None,
             parallel: false,
         };
@@ -306,7 +309,8 @@ mod tests {
             config: Config {
                 repositories: vec![],
             },
-            tag: None,
+            tag: vec![],
+            exclude_tag: vec![],
             repos: None,
             parallel: false,
         };

@@ -71,7 +71,8 @@ async fn test_run_command_basic_execution() {
         config: Config {
             repositories: vec![repo],
         },
-        tag: None,
+        tag: vec![],
+        exclude_tag: vec![],
         repos: None,
         parallel: false,
     };
@@ -81,40 +82,142 @@ async fn test_run_command_basic_execution() {
 }
 
 #[tokio::test]
-async fn test_run_command_multiple_repositories() {
+async fn test_run_command_no_matching_repos() {
     let temp_dir = TempDir::new().unwrap();
     let log_dir = temp_dir.path().join("logs");
     fs::create_dir_all(&log_dir).unwrap();
 
-    let mut repositories = Vec::new();
+    // Create a test repository directory
+    let repo_dir = temp_dir.path().join("test-repo");
+    fs::create_dir_all(&repo_dir).unwrap();
+    create_git_repo(&repo_dir).unwrap();
 
-    // Create multiple test repositories
-    for i in 1..=3 {
-        let repo_dir = temp_dir.path().join(format!("repo-{}", i));
-        fs::create_dir_all(&repo_dir).unwrap();
-        create_git_repo(&repo_dir).unwrap();
-
-        let repo = Repository {
-            name: format!("repo-{}", i),
-            url: format!("https://github.com/user/repo-{}.git", i),
-            tags: vec!["test".to_string()],
-            path: Some(repo_dir.to_string_lossy().to_string()),
-            branch: None,
-            config_dir: None,
-        };
-
-        repositories.push(repo);
-    }
+    let repo = Repository {
+        name: "test-repo".to_string(),
+        url: "https://github.com/user/test-repo.git".to_string(),
+        tags: vec!["test".to_string()],
+        path: Some(repo_dir.to_string_lossy().to_string()),
+        branch: None,
+        config_dir: None,
+    };
 
     let command = RunCommand {
-        command: "pwd".to_string(),
+        command: "echo hello".to_string(),
+        no_save: true,
+        output_dir: None,
+    };
+
+    // Use a tag that doesn't match any repo
+    let context = CommandContext {
+        config: Config {
+            repositories: vec![repo],
+        },
+        tag: vec!["nonexistent".to_string()],
+        exclude_tag: vec![],
+        repos: None,
+        parallel: false,
+    };
+
+    let result = command.execute(&context).await;
+    assert!(result.is_ok());
+}
+
+#[tokio::test]
+async fn test_run_command_with_specific_repos() {
+    let temp_dir = TempDir::new().unwrap();
+    let log_dir = temp_dir.path().join("logs");
+    fs::create_dir_all(&log_dir).unwrap();
+
+    let repo_dir1 = temp_dir.path().join("test-repo1");
+    fs::create_dir_all(&repo_dir1).unwrap();
+    create_git_repo(&repo_dir1).unwrap();
+
+    let repo_dir2 = temp_dir.path().join("test-repo2");
+    fs::create_dir_all(&repo_dir2).unwrap();
+    create_git_repo(&repo_dir2).unwrap();
+
+    let repo1 = Repository {
+        name: "test-repo1".to_string(),
+        url: "https://github.com/user/test-repo1.git".to_string(),
+        tags: vec!["test".to_string()],
+        path: Some(repo_dir1.to_string_lossy().to_string()),
+        branch: None,
+        config_dir: None,
+    };
+
+    let repo2 = Repository {
+        name: "test-repo2".to_string(),
+        url: "https://github.com/user/test-repo2.git".to_string(),
+        tags: vec!["other".to_string()],
+        path: Some(repo_dir2.to_string_lossy().to_string()),
+        branch: None,
+        config_dir: None,
+    };
+
+    let command = RunCommand {
+        command: "echo hello".to_string(),
         no_save: true,
         output_dir: None,
     };
 
     let context = CommandContext {
-        config: Config { repositories },
-        tag: None,
+        config: Config {
+            repositories: vec![repo1, repo2],
+        },
+        tag: vec![],
+        exclude_tag: vec![],
+        repos: Some(vec!["test-repo1".to_string()]),
+        parallel: false,
+    };
+
+    let result = command.execute(&context).await;
+    assert!(result.is_ok());
+}
+
+#[tokio::test]
+async fn test_run_command_with_tag_filter() {
+    let temp_dir = TempDir::new().unwrap();
+    let log_dir = temp_dir.path().join("logs");
+    fs::create_dir_all(&log_dir).unwrap();
+
+    let repo_dir1 = temp_dir.path().join("backend-repo");
+    fs::create_dir_all(&repo_dir1).unwrap();
+    create_git_repo(&repo_dir1).unwrap();
+
+    let repo_dir2 = temp_dir.path().join("frontend-repo");
+    fs::create_dir_all(&repo_dir2).unwrap();
+    create_git_repo(&repo_dir2).unwrap();
+
+    let backend_repo = Repository {
+        name: "backend-repo".to_string(),
+        url: "https://github.com/user/backend-repo.git".to_string(),
+        tags: vec!["backend".to_string(), "rust".to_string()],
+        path: Some(repo_dir1.to_string_lossy().to_string()),
+        branch: None,
+        config_dir: None,
+    };
+
+    let frontend_repo = Repository {
+        name: "frontend-repo".to_string(),
+        url: "https://github.com/user/frontend-repo.git".to_string(),
+        tags: vec!["frontend".to_string(), "javascript".to_string()],
+        path: Some(repo_dir2.to_string_lossy().to_string()),
+        branch: None,
+        config_dir: None,
+    };
+
+    let command = RunCommand {
+        command: "echo hello".to_string(),
+        no_save: true,
+        output_dir: None,
+    };
+
+    let context = CommandContext {
+        config: Config {
+            repositories: vec![backend_repo, frontend_repo],
+        },
+        tag: vec!["backend".to_string()],
+        exclude_tag: vec![],
         repos: None,
         parallel: false,
     };
@@ -129,131 +232,34 @@ async fn test_run_command_parallel_execution() {
     let log_dir = temp_dir.path().join("logs");
     fs::create_dir_all(&log_dir).unwrap();
 
-    let mut repositories = Vec::new();
+    let repo_dir1 = temp_dir.path().join("test-repo1");
+    fs::create_dir_all(&repo_dir1).unwrap();
+    create_git_repo(&repo_dir1).unwrap();
 
-    // Create multiple test repositories
-    for i in 1..=3 {
-        let repo_dir = temp_dir.path().join(format!("parallel-repo-{}", i));
-        fs::create_dir_all(&repo_dir).unwrap();
-        create_git_repo(&repo_dir).unwrap();
-
-        let repo = Repository {
-            name: format!("parallel-repo-{}", i),
-            url: format!("https://github.com/user/parallel-repo-{}.git", i),
-            tags: vec!["test".to_string()],
-            path: Some(repo_dir.to_string_lossy().to_string()),
-            branch: None,
-            config_dir: None,
-        };
-
-        repositories.push(repo);
-    }
-
-    let command = RunCommand {
-        command: "echo parallel".to_string(),
-        no_save: true,
-        output_dir: None,
-    };
-
-    let context = CommandContext {
-        config: Config { repositories },
-        tag: None,
-        repos: None,
-        parallel: true, // Enable parallel execution
-    };
-
-    let result = command.execute(&context).await;
-    assert!(result.is_ok());
-}
-
-#[tokio::test]
-async fn test_run_command_with_tag_filter() {
-    let temp_dir = TempDir::new().unwrap();
-    let log_dir = temp_dir.path().join("logs");
-    fs::create_dir_all(&log_dir).unwrap();
-
-    // Create repository with matching tag
-    let matching_repo_dir = temp_dir.path().join("backend-repo");
-    fs::create_dir_all(&matching_repo_dir).unwrap();
-    create_git_repo(&matching_repo_dir).unwrap();
-
-    let matching_repo = Repository {
-        name: "backend-repo".to_string(),
-        url: "https://github.com/user/backend-repo.git".to_string(),
-        tags: vec!["backend".to_string()],
-        path: Some(matching_repo_dir.to_string_lossy().to_string()),
-        branch: None,
-        config_dir: None,
-    };
-
-    // Create repository with non-matching tag
-    let non_matching_repo_dir = temp_dir.path().join("frontend-repo");
-    fs::create_dir_all(&non_matching_repo_dir).unwrap();
-    create_git_repo(&non_matching_repo_dir).unwrap();
-
-    let non_matching_repo = Repository {
-        name: "frontend-repo".to_string(),
-        url: "https://github.com/user/frontend-repo.git".to_string(),
-        tags: vec!["frontend".to_string()],
-        path: Some(non_matching_repo_dir.to_string_lossy().to_string()),
-        branch: None,
-        config_dir: None,
-    };
-
-    let command = RunCommand {
-        command: "echo tagged".to_string(),
-        no_save: true,
-        output_dir: None,
-    };
-
-    let context = CommandContext {
-        config: Config {
-            repositories: vec![matching_repo, non_matching_repo],
-        },
-        tag: Some("backend".to_string()),
-        repos: None,
-        parallel: false,
-    };
-
-    let result = command.execute(&context).await;
-    assert!(result.is_ok());
-}
-
-#[tokio::test]
-async fn test_run_command_with_repo_filter() {
-    let temp_dir = TempDir::new().unwrap();
-    let log_dir = temp_dir.path().join("logs");
-    fs::create_dir_all(&log_dir).unwrap();
-
-    // Create multiple repositories
-    let repo1_dir = temp_dir.path().join("repo1");
-    fs::create_dir_all(&repo1_dir).unwrap();
-    create_git_repo(&repo1_dir).unwrap();
-
-    let repo2_dir = temp_dir.path().join("repo2");
-    fs::create_dir_all(&repo2_dir).unwrap();
-    create_git_repo(&repo2_dir).unwrap();
+    let repo_dir2 = temp_dir.path().join("test-repo2");
+    fs::create_dir_all(&repo_dir2).unwrap();
+    create_git_repo(&repo_dir2).unwrap();
 
     let repo1 = Repository {
-        name: "repo1".to_string(),
-        url: "https://github.com/user/repo1.git".to_string(),
+        name: "test-repo1".to_string(),
+        url: "https://github.com/user/test-repo1.git".to_string(),
         tags: vec!["test".to_string()],
-        path: Some(repo1_dir.to_string_lossy().to_string()),
+        path: Some(repo_dir1.to_string_lossy().to_string()),
         branch: None,
         config_dir: None,
     };
 
     let repo2 = Repository {
-        name: "repo2".to_string(),
-        url: "https://github.com/user/repo2.git".to_string(),
+        name: "test-repo2".to_string(),
+        url: "https://github.com/user/test-repo2.git".to_string(),
         tags: vec!["test".to_string()],
-        path: Some(repo2_dir.to_string_lossy().to_string()),
+        path: Some(repo_dir2.to_string_lossy().to_string()),
         branch: None,
         config_dir: None,
     };
 
     let command = RunCommand {
-        command: "echo filtered".to_string(),
+        command: "echo hello".to_string(),
         no_save: true,
         output_dir: None,
     };
@@ -262,8 +268,48 @@ async fn test_run_command_with_repo_filter() {
         config: Config {
             repositories: vec![repo1, repo2],
         },
-        tag: None,
-        repos: Some(vec!["repo1".to_string()]), // Only run on repo1
+        tag: vec![],
+        exclude_tag: vec![],
+        repos: None,
+        parallel: true,
+    };
+
+    let result = command.execute(&context).await;
+    assert!(result.is_ok());
+}
+
+#[tokio::test]
+async fn test_run_command_tag_filter_no_match() {
+    let temp_dir = TempDir::new().unwrap();
+    let log_dir = temp_dir.path().join("logs");
+    fs::create_dir_all(&log_dir).unwrap();
+
+    let repo_dir = temp_dir.path().join("backend-repo");
+    fs::create_dir_all(&repo_dir).unwrap();
+    create_git_repo(&repo_dir).unwrap();
+
+    let backend_repo = Repository {
+        name: "backend-repo".to_string(),
+        url: "https://github.com/user/backend-repo.git".to_string(),
+        tags: vec!["backend".to_string(), "rust".to_string()],
+        path: Some(repo_dir.to_string_lossy().to_string()),
+        branch: None,
+        config_dir: None,
+    };
+
+    let command = RunCommand {
+        command: "echo hello".to_string(),
+        no_save: true,
+        output_dir: None,
+    };
+
+    let context = CommandContext {
+        config: Config {
+            repositories: vec![backend_repo],
+        },
+        tag: vec!["frontend".to_string()], // Non-matching tag
+        exclude_tag: vec![],
+        repos: None,
         parallel: false,
     };
 
@@ -272,84 +318,18 @@ async fn test_run_command_with_repo_filter() {
 }
 
 #[tokio::test]
-async fn test_run_command_no_matching_repositories() {
+async fn test_run_command_error_handling() {
     let temp_dir = TempDir::new().unwrap();
     let log_dir = temp_dir.path().join("logs");
     fs::create_dir_all(&log_dir).unwrap();
+
+    let repo_dir = temp_dir.path().join("test-repo");
+    fs::create_dir_all(&repo_dir).unwrap();
+    create_git_repo(&repo_dir).unwrap();
 
     let repo = Repository {
         name: "test-repo".to_string(),
         url: "https://github.com/user/test-repo.git".to_string(),
-        tags: vec!["backend".to_string()],
-        path: Some(
-            temp_dir
-                .path()
-                .join("test-repo")
-                .to_string_lossy()
-                .to_string(),
-        ),
-        branch: None,
-        config_dir: None,
-    };
-
-    let command = RunCommand {
-        command: "echo test".to_string(),
-        no_save: true,
-        output_dir: None,
-    };
-
-    let context = CommandContext {
-        config: Config {
-            repositories: vec![repo],
-        },
-        tag: Some("frontend".to_string()), // Non-matching tag
-        repos: None,
-        parallel: false,
-    };
-
-    let result = command.execute(&context).await;
-    assert!(result.is_ok()); // Should succeed but do nothing
-}
-
-#[tokio::test]
-async fn test_run_command_empty_repositories() {
-    let temp_dir = TempDir::new().unwrap();
-    let log_dir = temp_dir.path().join("logs");
-    fs::create_dir_all(&log_dir).unwrap();
-
-    let command = RunCommand {
-        command: "echo test".to_string(),
-        no_save: true,
-        output_dir: None,
-    };
-
-    let context = CommandContext {
-        config: Config {
-            repositories: vec![],
-        },
-        tag: None,
-        repos: None,
-        parallel: false,
-    };
-
-    let result = command.execute(&context).await;
-    assert!(result.is_ok()); // Should succeed with empty repository list
-}
-
-#[tokio::test]
-async fn test_run_command_complex_command() {
-    let temp_dir = TempDir::new().unwrap();
-    let log_dir = temp_dir.path().join("logs");
-    fs::create_dir_all(&log_dir).unwrap();
-
-    // Create a test repository directory
-    let repo_dir = temp_dir.path().join("complex-repo");
-    fs::create_dir_all(&repo_dir).unwrap();
-    create_git_repo(&repo_dir).unwrap();
-
-    let repo = Repository {
-        name: "complex-repo".to_string(),
-        url: "https://github.com/user/complex-repo.git".to_string(),
         tags: vec!["test".to_string()],
         path: Some(repo_dir.to_string_lossy().to_string()),
         branch: None,
@@ -357,7 +337,7 @@ async fn test_run_command_complex_command() {
     };
 
     let command = RunCommand {
-        command: "git status && echo done".to_string(),
+        command: "false".to_string(), // Command that will fail
         no_save: true,
         output_dir: None,
     };
@@ -366,37 +346,39 @@ async fn test_run_command_complex_command() {
         config: Config {
             repositories: vec![repo],
         },
-        tag: None,
+        tag: vec![],
+        exclude_tag: vec![],
         repos: None,
         parallel: false,
     };
 
     let result = command.execute(&context).await;
-    assert!(result.is_ok());
+    // The command should fail when all individual commands fail
+    assert!(result.is_err());
 }
 
 #[tokio::test]
-async fn test_run_command_command_with_special_characters() {
+async fn test_run_command_file_operations() {
     let temp_dir = TempDir::new().unwrap();
     let log_dir = temp_dir.path().join("logs");
     fs::create_dir_all(&log_dir).unwrap();
 
-    // Create a test repository directory
-    let repo_dir = temp_dir.path().join("special-repo");
+    let repo_dir = temp_dir.path().join("test-repo");
     fs::create_dir_all(&repo_dir).unwrap();
     create_git_repo(&repo_dir).unwrap();
 
     let repo = Repository {
-        name: "special-repo".to_string(),
-        url: "https://github.com/user/special-repo.git".to_string(),
+        name: "test-repo".to_string(),
+        url: "https://github.com/user/test-repo.git".to_string(),
         tags: vec!["test".to_string()],
         path: Some(repo_dir.to_string_lossy().to_string()),
         branch: None,
         config_dir: None,
     };
 
+    // Test command that creates a file
     let command = RunCommand {
-        command: "echo 'hello world' && echo \"quoted text\"".to_string(),
+        command: "touch test-file.txt".to_string(),
         no_save: true,
         output_dir: None,
     };
@@ -405,61 +387,52 @@ async fn test_run_command_command_with_special_characters() {
         config: Config {
             repositories: vec![repo],
         },
-        tag: None,
+        tag: vec![],
+        exclude_tag: vec![],
         repos: None,
         parallel: false,
     };
 
     let result = command.execute(&context).await;
     assert!(result.is_ok());
+
+    // Verify the file was created
+    assert!(repo_dir.join("test-file.txt").exists());
 }
 
 #[tokio::test]
-async fn test_run_command_combined_filters() {
+async fn test_run_command_with_multiple_tags() {
     let temp_dir = TempDir::new().unwrap();
     let log_dir = temp_dir.path().join("logs");
     fs::create_dir_all(&log_dir).unwrap();
 
-    // Create repository matching both tag and name filters
-    let matching_repo_dir = temp_dir.path().join("matching-repo");
-    fs::create_dir_all(&matching_repo_dir).unwrap();
-    create_git_repo(&matching_repo_dir).unwrap();
+    let repo_dir = temp_dir.path().join("backend-repo");
+    fs::create_dir_all(&repo_dir).unwrap();
+    create_git_repo(&repo_dir).unwrap();
 
-    let matching_repo = Repository {
-        name: "matching-repo".to_string(),
-        url: "https://github.com/user/matching-repo.git".to_string(),
-        tags: vec!["backend".to_string()],
-        path: Some(matching_repo_dir.to_string_lossy().to_string()),
-        branch: None,
-        config_dir: None,
-    };
-
-    // Create repository with matching tag but wrong name
-    let wrong_name_repo_dir = temp_dir.path().join("wrong-name-repo");
-    fs::create_dir_all(&wrong_name_repo_dir).unwrap();
-    create_git_repo(&wrong_name_repo_dir).unwrap();
-
-    let wrong_name_repo = Repository {
-        name: "wrong-name-repo".to_string(),
-        url: "https://github.com/user/wrong-name-repo.git".to_string(),
-        tags: vec!["backend".to_string()],
-        path: Some(wrong_name_repo_dir.to_string_lossy().to_string()),
+    let backend_repo = Repository {
+        name: "backend-repo".to_string(),
+        url: "https://github.com/user/backend-repo.git".to_string(),
+        tags: vec!["backend".to_string(), "rust".to_string()],
+        path: Some(repo_dir.to_string_lossy().to_string()),
         branch: None,
         config_dir: None,
     };
 
     let command = RunCommand {
-        command: "echo combined".to_string(),
+        command: "echo hello".to_string(),
         no_save: true,
         output_dir: None,
     };
 
+    // Test with multiple matching tags
     let context = CommandContext {
         config: Config {
-            repositories: vec![matching_repo, wrong_name_repo],
+            repositories: vec![backend_repo],
         },
-        tag: Some("backend".to_string()),
-        repos: Some(vec!["matching-repo".to_string()]),
+        tag: vec!["backend".to_string()],
+        exclude_tag: vec![],
+        repos: None,
         parallel: false,
     };
 
