@@ -4,322 +4,174 @@ on:
   push:
     branches:
       - 'release/**'
-    paths:
-      - 'src/**'
-      - 'Cargo.toml'
-      - 'Cargo.lock'
-  pull_request:
-    branches:
-      - 'release/**'
-    paths:
-      - 'src/**'
-      - 'Cargo.toml'
-      - 'Cargo.lock'
   workflow_dispatch:
-    inputs:
-      release_branch:
-        description: 'Release branch to build from (e.g., release/1.2)'
-        required: false
-        default: 'main'
-        type: string
 
 permissions:
   contents: write
   packages: write
   pull-requests: read
+
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
 
 jobs:
   semantic-version:
-    name: Determine Version
+    name: Compute Version
     runs-on: ubuntu-latest
     outputs:
-      version: ${{ steps.version.outputs.version }}
-      version_tag: ${{ steps.version.outputs.version_tag }}
-      changed: ${{ steps.version.outputs.changed }}
-      changelog: ${{ steps.version.outputs.changelog }}
+      version: ${{ steps.semver.outputs.version }}
+      version_tag: ${{ steps.semver.outputs.version_tag }}
+      changed: ${{ steps.semver.outputs.changed }}
+      changelog: ${{ steps.semver.outputs.changelog }}
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v5
+      - uses: actions/checkout@v5
         with:
-          ref: ${{ github.event.inputs.release_branch || github.ref }}
           fetch-depth: 0
-
-      - name: Semantic version
-        id: version
+      - id: semver
         uses: PaulHatch/semantic-version@v5.4.0
         with:
-          tag_prefix: "v"
-          major_pattern: "BREAKING CHANGE:"
-          minor_pattern: "feat:"
-          bump_each_commit: false
-          search_commit_body: true
-          user_format_type: "csv"
-          enable_prerelease_mode: true
+            tag_prefix: "v"
+            major_pattern: "BREAKING CHANGE:"
+            minor_pattern: "feat:"
+            bump_each_commit: false
+            search_commit_body: true
+            user_format_type: "csv"
+            enable_prerelease_mode: true
+      - name: Fail if no semantic changes
+        if: steps.semver.outputs.changed != 'true'
+        run: |
+          echo "No semantic changes since last tag. Skipping release."
+          exit 1
 
-  create-release:
-    name: Create Release
+  test:
+    name: Test & Lint
     runs-on: ubuntu-latest
     needs: semantic-version
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release/')
-    outputs:
-      upload_url: ${{ steps.create_release.outputs.upload_url }}
-      version: ${{ needs.semantic-version.outputs.version }}
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v5
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
 
-      - name: Update Cargo.toml version
+      - name: Format check
+        run: cargo fmt --all -- --check
+      - name: Clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
+      - name: Tests
+        run: cargo test --all --locked
+
+  update-version:
+    name: Sync Cargo Version
+    runs-on: ubuntu-latest
+    needs: [semantic-version, test]
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Update Cargo.toml
         run: |
           sed -i.bak 's/^version = ".*"/version = "${{ needs.semantic-version.outputs.version }}"/' Cargo.toml && rm Cargo.toml.bak
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
+          git config user.email "action@github.com"
+          git config user.name "GitHub Action"
           git add Cargo.toml
-          git commit -m "chore: bump version to ${{ needs.semantic-version.outputs.version }}" || exit 0
-          git push || exit 0
+          git commit -m "chore: sync version ${{ needs.semantic-version.outputs.version }}" || echo "No change"
+          git push || true
 
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [semantic-version, test, update-version]
+    outputs:
+      upload_url: ${{ steps.rel.outputs.upload_url }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Create tag
+        run: |
+          git fetch --tags
+          if git rev-parse "v${{ needs.semantic-version.outputs.version }}" >/dev/null 2>&1; then
+            echo "Tag already exists. Skipping."
+          else
+            git tag -a "v${{ needs.semantic-version.outputs.version }}" -m "Release ${{ needs.semantic-version.outputs.version }}"
+            git push origin "v${{ needs.semantic-version.outputs.version }}"
+          fi
       - name: Create Release
-        id: create_release
+        id: rel
         uses: softprops/action-gh-release@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ${{ needs.semantic-version.outputs.version_tag }}
           name: Release ${{ needs.semantic-version.outputs.version }}
-          draft: false
-          prerelease: false
           generate_release_notes: true
           body: |
             ${{ needs.semantic-version.outputs.changelog }}
 
-  build-release:
-    name: Build Release Binary
+  build-matrix:
+    name: Build Targets
     needs: [semantic-version, create-release]
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release/')
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            suffix: ""
           - os: macos-latest
             target: x86_64-apple-darwin
-            suffix: ""
           - os: macos-latest
             target: aarch64-apple-darwin
-            suffix: ""
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v5
-        with:
-          ref: main
-          fetch-depth: 1
-
-      - name: Pull latest changes
-        run: git pull origin main
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
-
-      - name: Cache dependencies
-        uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.target }}
-
-      - name: Build for ${{ matrix.target }}
+      - name: Build
         run: cargo build --release --target ${{ matrix.target }}
-
-      - name: Rename binary
-        run: mv target/${{ matrix.target }}/release/repos repos-${{ matrix.target }}
-
-      - name: Strip binary (macOS)
-        if: runner.os == 'macOS'
-        run: strip -x repos-${{ matrix.target }}
-
-      - name: Strip binary (Linux)
-        if: runner.os == 'Linux'
-        run: strip repos-${{ matrix.target }}
-
-      - name: Create archive
-        shell: bash
+      - name: Strip (Linux)
+        if: startsWith(matrix.target, 'x86_64-unknown-linux')
+        run: strip target/${{ matrix.target }}/release/repos
+      - name: Strip (macOS)
+        if: contains(matrix.target, 'apple-darwin')
+        run: strip -x target/${{ matrix.target }}/release/repos || true
+      - name: Package
         run: |
           staging="repos-${{ needs.semantic-version.outputs.version }}-${{ matrix.target }}"
-          mkdir -p "$staging"
-
-          cp repos-${{ matrix.target }}${{ matrix.suffix }} "$staging/"
-          cp README.md "$staging/" 2>/dev/null || true
-          if [ -f LICENSE ]; then cp LICENSE "$staging/"; fi
-
+          mkdir "$staging"
+          cp target/${{ matrix.target }}/release/repos "$staging/"
           tar czf "$staging.tar.gz" "$staging"
           echo "ASSET=$staging.tar.gz" >> $GITHUB_ENV
-
-      - name: Upload Release Asset
+      - name: Upload Asset
         uses: softprops/action-gh-release@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ${{ needs.semantic-version.outputs.version_tag }}
           files: ${{ env.ASSET }}
 
   build-universal-macos:
-    name: Build Universal macOS Binary
-    needs: [semantic-version, create-release]
+    name: Universal macOS
     runs-on: macos-latest
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release/')
+    needs: [semantic-version, create-release, build-matrix]
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v5
-        with:
-          ref: main
-          fetch-depth: 1
-
-      - name: Pull latest changes
-        run: git pull origin main
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
         with:
           targets: x86_64-apple-darwin,aarch64-apple-darwin
-
-      - name: Cache dependencies
-        uses: Swatinem/rust-cache@v2
-        with:
-          key: universal-macos
-
-      - name: Build for both architectures
-        run: |
-          cargo build --release --target x86_64-apple-darwin
-          cargo build --release --target aarch64-apple-darwin
-
-      - name: Create universal binary
-        run: |
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release --target x86_64-apple-darwin
+      - run: cargo build --release --target aarch64-apple-darwin
+      - run: |
           lipo -create \
             target/x86_64-apple-darwin/release/repos \
             target/aarch64-apple-darwin/release/repos \
-            -output repos-universal-apple-darwin
-
-          # Verify the universal binary
-          lipo -info repos-universal-apple-darwin
-
-      - name: Strip universal binary
-        run: strip -x repos-universal-apple-darwin
-
-      - name: Create universal archive
-        run: |
+            -output repos
+          strip -x repos || true
           staging="repos-${{ needs.semantic-version.outputs.version }}-universal-apple-darwin"
-          mkdir -p "$staging"
-          cp repos-universal-apple-darwin "$staging/repos"
-          cp README.md "$staging/" 2>/dev/null || true
-          if [ -f LICENSE ]; then cp LICENSE "$staging/"; fi
+          mkdir "$staging"
+          mv repos "$staging/"
           tar czf "$staging.tar.gz" "$staging"
-          echo "UNIVERSAL_ASSET=$staging.tar.gz" >> $GITHUB_ENV
-
-      - name: Upload Universal macOS Asset
-        uses: softprops/action-gh-release@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          echo "UNIVERSAL=$staging.tar.gz" >> $GITHUB_ENV
+      - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.semantic-version.outputs.version_tag }}
-          files: ${{ env.UNIVERSAL_ASSET }}
-
-  # publish-crate:
-  #   name: Publish to crates.io
-  #   needs: [semantic-version, create-release, build-release, build-universal-macos]
-  #   runs-on: ubuntu-latest
-  #   if: needs.semantic-version.outputs.changed == 'true' && github.event_name == 'push' && !contains(needs.semantic-version.outputs.version, 'alpha') && !contains(needs.semantic-version.outputs.version, 'beta') && !contains(needs.semantic-version.outputs.version, 'rc')
-
-  #   steps:
-  #     - name: Checkout code
-  #       uses: actions/checkout@v5
-  #       with:
-  #         ref: main
-  #         fetch-depth: 1
-
-  #     - name: Pull latest changes
-  #       run: git pull origin main
-
-  #     - name: Install Rust
-  #       uses: dtolnay/rust-toolchain@stable
-
-  #     - name: Cache dependencies
-  #       uses: Swatinem/rust-cache@v2
-
-  #     - name: Publish to crates.io
-  #       run: cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
-  docker-release:
-    name: Build and Push Docker Image
-    needs: [semantic-version, create-release]
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release/')
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v5
-        with:
-          ref: main
-          fetch-depth: 1
-
-      - name: Pull latest changes
-        run: git pull origin main
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract metadata for 0.x versions
-        id: meta-prerelease
-        if: startsWith(needs.semantic-version.outputs.version, '0.')
-        uses: docker/metadata-action@v5
-        with:
-          images: |
-            ${{ secrets.DOCKER_USERNAME }}/repos
-            ghcr.io/${{ github.repository }}
-          tags: |
-            type=semver,pattern={{version}},value=${{ needs.semantic-version.outputs.version }}
-            type=raw,value=latest
-
-      - name: Extract metadata for 1.x+ versions
-        id: meta-stable
-        if: "!startsWith(needs.semantic-version.outputs.version, '0.')"
-        uses: docker/metadata-action@v5
-        with:
-          images: |
-            ${{ secrets.DOCKER_USERNAME }}/repos
-            ghcr.io/${{ github.repository }}
-          tags: |
-            type=semver,pattern={{version}},value=${{ needs.semantic-version.outputs.version }}
-            type=semver,pattern={{major}}.{{minor}},value=${{ needs.semantic-version.outputs.version }}
-            type=semver,pattern={{major}},value=${{ needs.semantic-version.outputs.version }}
-            type=raw,value=latest
-
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.meta-prerelease.outputs.tags || steps.meta-stable.outputs.tags }}
-          labels: ${{ steps.meta-prerelease.outputs.labels || steps.meta-stable.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          provenance: false
-          sbom: false
-          build-args: |
-            VERSION=${{ needs.semantic-version.outputs.version }}
+          files: ${{ env.UNIVERSAL }}
