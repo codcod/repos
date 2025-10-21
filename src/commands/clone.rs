@@ -12,17 +12,31 @@ pub struct CloneCommand;
 #[async_trait]
 impl Command for CloneCommand {
     async fn execute(&self, context: &CommandContext) -> Result<()> {
-        let repositories = context
-            .config
-            .filter_repositories(context.tag.as_deref(), context.repos.as_deref());
+        let repositories = context.config.filter_repositories(
+            &context.tag,
+            &context.exclude_tag,
+            context.repos.as_deref(),
+        );
 
         if repositories.is_empty() {
-            let filter_desc = match (&context.tag, &context.repos) {
-                (Some(tag), Some(repos)) => format!("tag '{tag}' and repositories {repos:?}"),
-                (Some(tag), None) => format!("tag '{tag}'"),
-                (None, Some(repos)) => format!("repositories {repos:?}"),
-                (None, None) => "no repositories found".to_string(),
+            let mut filter_parts = Vec::new();
+
+            if !context.tag.is_empty() {
+                filter_parts.push(format!("tags {:?}", context.tag));
+            }
+            if !context.exclude_tag.is_empty() {
+                filter_parts.push(format!("excluding tags {:?}", context.exclude_tag));
+            }
+            if let Some(repos) = &context.repos {
+                filter_parts.push(format!("repositories {:?}", repos));
+            }
+
+            let filter_desc = if filter_parts.is_empty() {
+                "no repositories found".to_string()
+            } else {
+                filter_parts.join(" and ")
             };
+
             println!(
                 "{}",
                 format!("No repositories found with {filter_desc}").yellow()
@@ -141,15 +155,16 @@ mod tests {
     }
 
     /// Helper to create CommandContext for testing
-    fn create_command_context(
+    fn create_context(
         config: Config,
-        tag: Option<String>,
+        tag: Vec<String>,
         repos: Option<Vec<String>>,
         parallel: bool,
     ) -> CommandContext {
         CommandContext {
             config,
             tag,
+            exclude_tag: Vec::new(),
             repos,
             parallel,
         }
@@ -161,7 +176,7 @@ mod tests {
         let command = CloneCommand;
 
         // Test with tag that doesn't match any repository
-        let context = create_command_context(config, Some("nonexistent".to_string()), None, false);
+        let context = create_context(config, vec!["nonexistent".to_string()], None, false);
 
         let result = command.execute(&context).await;
         assert!(result.is_ok());
@@ -174,7 +189,7 @@ mod tests {
         let command = CloneCommand;
 
         // Test with tag that matches some repositories
-        let context = create_command_context(config, Some("frontend".to_string()), None, false);
+        let context = create_context(config, vec!["frontend".to_string()], None, false);
 
         let result = command.execute(&context).await;
         // This will likely fail because we're trying to actually clone repos,
@@ -188,9 +203,9 @@ mod tests {
         let command = CloneCommand;
 
         // Test with specific repository names
-        let context = create_command_context(
+        let context = create_context(
             config,
-            None,
+            vec![],
             Some(vec!["test-repo-1".to_string(), "test-repo-2".to_string()]),
             false,
         );
@@ -207,9 +222,9 @@ mod tests {
         let command = CloneCommand;
 
         // Test with both tag and repository filters
-        let context = create_command_context(
+        let context = create_context(
             config,
-            Some("frontend".to_string()),
+            vec!["frontend".to_string()],
             Some(vec!["test-repo-1".to_string()]),
             false,
         );
@@ -224,7 +239,7 @@ mod tests {
         let command = CloneCommand;
 
         // Test parallel execution mode
-        let context = create_command_context(config, Some("frontend".to_string()), None, true);
+        let context = create_context(config, vec!["frontend".to_string()], None, true);
 
         let result = command.execute(&context).await;
         // Should test parallel execution path
@@ -237,7 +252,7 @@ mod tests {
         let command = CloneCommand;
 
         // Test sequential execution mode
-        let context = create_command_context(config, Some("backend".to_string()), None, false);
+        let context = create_context(config, vec!["backend".to_string()], None, false);
 
         let result = command.execute(&context).await;
         // Should test sequential execution path
@@ -250,9 +265,9 @@ mod tests {
         let command = CloneCommand;
 
         // Test with repository names that don't exist
-        let context = create_command_context(
+        let context = create_context(
             config,
-            None,
+            vec![],
             Some(vec!["nonexistent-repo".to_string()]),
             false,
         );
@@ -267,7 +282,7 @@ mod tests {
         let command = CloneCommand;
 
         // Test with no filters (should try to clone all repositories)
-        let context = create_command_context(config, None, None, false);
+        let context = create_context(config, vec![], None, false);
 
         let result = command.execute(&context).await;
         // This will likely fail because we're trying to clone real repos,
@@ -289,7 +304,7 @@ mod tests {
         };
 
         let command = CloneCommand;
-        let context = create_command_context(config, None, None, false);
+        let context = create_context(config, vec![], None, false);
 
         let result = command.execute(&context).await;
         // Should fail because all clone operations fail
@@ -305,7 +320,7 @@ mod tests {
         let config = create_test_config();
         let command = CloneCommand;
 
-        let context = create_command_context(config, None, None, false);
+        let context = create_context(config, vec![], None, false);
 
         let result = command.execute(&context).await;
         // The result depends on actual git operations, but we're testing the logic paths
@@ -332,7 +347,7 @@ mod tests {
         };
 
         let command = CloneCommand;
-        let context = create_command_context(config, None, None, true); // Parallel execution
+        let context = create_context(config, vec![], None, true); // Parallel execution
 
         let result = command.execute(&context).await;
         // Should fail due to invalid repositories, but tests parallel error handling
@@ -347,14 +362,14 @@ mod tests {
         // Test different filter combination scenarios
 
         // Tag only
-        let context = create_command_context(config.clone(), Some("rust".to_string()), None, false);
+        let context = create_context(config.clone(), vec!["rust".to_string()], None, false);
         let result = command.execute(&context).await;
         assert!(result.is_err() || result.is_ok());
 
         // Repos only
-        let context = create_command_context(
+        let context = create_context(
             config.clone(),
-            None,
+            vec![],
             Some(vec!["test-repo-3".to_string()]),
             false,
         );
@@ -362,9 +377,9 @@ mod tests {
         assert!(result.is_err() || result.is_ok());
 
         // Both tag and repos
-        let context = create_command_context(
+        let context = create_context(
             config,
-            Some("frontend".to_string()),
+            vec!["frontend".to_string()],
             Some(vec!["test-repo-1".to_string(), "test-repo-3".to_string()]),
             false,
         );
@@ -380,7 +395,7 @@ mod tests {
         };
 
         let command = CloneCommand;
-        let context = create_command_context(config, None, None, false);
+        let context = create_context(config, vec![], None, false);
 
         let result = command.execute(&context).await;
         assert!(result.is_ok()); // Should succeed with no repositories message
@@ -394,7 +409,7 @@ mod tests {
         let command = CloneCommand;
 
         // Use parallel execution to test task error handling paths
-        let context = create_command_context(config, Some("backend".to_string()), None, true);
+        let context = create_context(config, vec!["backend".to_string()], None, true);
 
         let result = command.execute(&context).await;
         // Tests the parallel task error handling code paths

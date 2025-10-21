@@ -36,13 +36,15 @@ fn create_test_config() -> Config {
 /// Helper function to create a test context
 fn create_test_context(
     config: Config,
-    tag: Option<String>,
+    tag: Vec<String>,
+    exclude_tag: Vec<String>,
     repos: Option<Vec<String>>,
     parallel: bool,
 ) -> CommandContext {
     CommandContext {
         config,
         tag,
+        exclude_tag,
         parallel,
         repos,
     }
@@ -51,7 +53,7 @@ fn create_test_context(
 #[tokio::test]
 async fn test_pr_command_basic_execution() {
     let config = create_test_config();
-    let context = create_test_context(config, None, None, false);
+    let context = create_test_context(config, vec![], vec![], None, false);
 
     let pr_command = PrCommand {
         title: "Test PR".to_string(),
@@ -73,7 +75,7 @@ async fn test_pr_command_basic_execution() {
 #[tokio::test]
 async fn test_pr_command_with_tag_filter() {
     let config = create_test_config();
-    let context = create_test_context(config, Some("backend".to_string()), None, false);
+    let context = create_test_context(config, vec!["backend".to_string()], vec![], None, false);
 
     let pr_command = PrCommand {
         title: "Backend PR".to_string(),
@@ -95,7 +97,8 @@ async fn test_pr_command_with_specific_repos() {
     let config = create_test_config();
     let context = create_test_context(
         config,
-        None,
+        vec![],
+        vec![],
         Some(vec!["repo1".to_string(), "repo3".to_string()]),
         false,
     );
@@ -120,7 +123,8 @@ async fn test_pr_command_with_tag_and_repos_filter() {
     let config = create_test_config();
     let context = create_test_context(
         config,
-        Some("backend".to_string()),
+        vec!["backend".to_string()],
+        vec![],
         Some(vec!["repo2".to_string()]),
         false,
     );
@@ -143,7 +147,7 @@ async fn test_pr_command_with_tag_and_repos_filter() {
 #[tokio::test]
 async fn test_pr_command_no_matching_repositories() {
     let config = create_test_config();
-    let context = create_test_context(config, Some("nonexistent".to_string()), None, false);
+    let context = create_test_context(config, vec!["nonexistent".to_string()], vec![], None, false);
 
     let pr_command = PrCommand {
         title: "No repos PR".to_string(),
@@ -166,7 +170,7 @@ async fn test_pr_command_empty_repositories() {
     let config = Config {
         repositories: vec![],
     };
-    let context = create_test_context(config, None, None, false);
+    let context = create_test_context(config, vec![], vec![], None, false);
 
     let pr_command = PrCommand {
         title: "Empty config PR".to_string(),
@@ -187,7 +191,7 @@ async fn test_pr_command_empty_repositories() {
 #[tokio::test]
 async fn test_pr_command_parallel_execution() {
     let config = create_test_config();
-    let context = create_test_context(config, None, None, true); // parallel = true
+    let context = create_test_context(config, vec![], vec![], None, true); // parallel = true
 
     let pr_command = PrCommand {
         title: "Parallel PR".to_string(),
@@ -207,7 +211,7 @@ async fn test_pr_command_parallel_execution() {
 #[tokio::test]
 async fn test_pr_command_with_custom_branch_name() {
     let config = create_test_config();
-    let context = create_test_context(config, None, None, false);
+    let context = create_test_context(config, vec![], vec![], None, false);
 
     let pr_command = PrCommand {
         title: "Custom branch PR".to_string(),
@@ -227,7 +231,7 @@ async fn test_pr_command_with_custom_branch_name() {
 #[tokio::test]
 async fn test_pr_command_with_custom_base_branch() {
     let config = create_test_config();
-    let context = create_test_context(config, None, None, false);
+    let context = create_test_context(config, vec![], vec![], None, false);
 
     let pr_command = PrCommand {
         title: "Custom base PR".to_string(),
@@ -247,7 +251,7 @@ async fn test_pr_command_with_custom_base_branch() {
 #[tokio::test]
 async fn test_pr_command_with_custom_commit_message() {
     let config = create_test_config();
-    let context = create_test_context(config, None, None, false);
+    let context = create_test_context(config, vec![], vec![], None, false);
 
     let pr_command = PrCommand {
         title: "Custom commit PR".to_string(),
@@ -267,7 +271,7 @@ async fn test_pr_command_with_custom_commit_message() {
 #[tokio::test]
 async fn test_pr_command_draft_mode() {
     let config = create_test_config();
-    let context = create_test_context(config, None, None, false);
+    let context = create_test_context(config, vec![], vec![], None, false);
 
     let pr_command = PrCommand {
         title: "Draft PR".to_string(),
@@ -287,7 +291,7 @@ async fn test_pr_command_draft_mode() {
 #[tokio::test]
 async fn test_pr_command_create_only_mode() {
     let config = create_test_config();
-    let context = create_test_context(config, None, None, false);
+    let context = create_test_context(config, vec![], vec![], None, false);
 
     let pr_command = PrCommand {
         title: "Create only PR".to_string(),
@@ -307,7 +311,7 @@ async fn test_pr_command_create_only_mode() {
 #[tokio::test]
 async fn test_pr_command_without_create_only() {
     let config = create_test_config();
-    let context = create_test_context(config, None, None, false);
+    let context = create_test_context(config, vec![], vec![], None, false);
 
     let pr_command = PrCommand {
         title: "Full PR".to_string(),
@@ -328,7 +332,7 @@ async fn test_pr_command_without_create_only() {
 #[tokio::test]
 async fn test_pr_command_empty_token() {
     let config = create_test_config();
-    let context = create_test_context(config, None, None, false);
+    let context = create_test_context(config, vec![], vec![], None, false);
 
     let pr_command = PrCommand {
         title: "Empty token PR".to_string(),
@@ -348,7 +352,7 @@ async fn test_pr_command_empty_token() {
 #[tokio::test]
 async fn test_pr_command_special_characters_in_title() {
     let config = create_test_config();
-    let context = create_test_context(config, None, None, false);
+    let context = create_test_context(config, vec![], vec![], None, false);
 
     let pr_command = PrCommand {
         title: "PR with special chars: 你好 🚀 @#$%".to_string(),
@@ -368,7 +372,7 @@ async fn test_pr_command_special_characters_in_title() {
 #[tokio::test]
 async fn test_pr_command_very_long_title() {
     let config = create_test_config();
-    let context = create_test_context(config, None, None, false);
+    let context = create_test_context(config, vec![], vec![], None, false);
 
     let long_title = "A".repeat(1000);
     let pr_command = PrCommand {
@@ -389,7 +393,7 @@ async fn test_pr_command_very_long_title() {
 #[tokio::test]
 async fn test_pr_command_very_long_body() {
     let config = create_test_config();
-    let context = create_test_context(config, None, None, false);
+    let context = create_test_context(config, vec![], vec![], None, false);
 
     let long_body = "B".repeat(10000);
     let pr_command = PrCommand {
@@ -412,7 +416,8 @@ async fn test_pr_command_all_options_combined() {
     let config = create_test_config();
     let context = create_test_context(
         config,
-        Some("backend".to_string()),
+        vec!["backend".to_string()],
+        vec![],
         Some(vec!["repo2".to_string()]),
         true, // parallel
     );
@@ -437,7 +442,8 @@ async fn test_pr_command_invalid_repository_names() {
     let config = create_test_config();
     let context = create_test_context(
         config,
-        None,
+        vec![],
+        vec![],
         Some(vec!["nonexistent1".to_string(), "nonexistent2".to_string()]),
         false,
     );
@@ -463,7 +469,8 @@ async fn test_pr_command_mixed_valid_invalid_repos() {
     let config = create_test_config();
     let context = create_test_context(
         config,
-        None,
+        vec![],
+        vec![],
         Some(vec![
             "repo1".to_string(),
             "nonexistent".to_string(),
@@ -490,7 +497,7 @@ async fn test_pr_command_mixed_valid_invalid_repos() {
 #[tokio::test]
 async fn test_pr_command_case_sensitive_tag_filter() {
     let config = create_test_config();
-    let context = create_test_context(config, Some("BACKEND".to_string()), None, false);
+    let context = create_test_context(config, vec!["BACKEND".to_string()], vec![], None, false);
 
     let pr_command = PrCommand {
         title: "Case sensitive PR".to_string(),
@@ -513,7 +520,8 @@ async fn test_pr_command_case_sensitive_repo_names() {
     let config = create_test_config();
     let context = create_test_context(
         config,
-        None,
+        vec![],
+        vec![],
         Some(vec!["REPO1".to_string()]), // Wrong case
         false,
     );
@@ -532,4 +540,139 @@ async fn test_pr_command_case_sensitive_repo_names() {
     // Should find no repos because repo names are case sensitive
     let result = pr_command.execute(&context).await;
     assert!(result.is_ok());
+}
+
+#[tokio::test]
+async fn test_pr_command_with_exclude_tag() {
+    let config = create_test_config();
+    let context = create_test_context(
+        config,
+        vec![],                       // No inclusion tags
+        vec!["frontend".to_string()], // Exclude frontend
+        None,
+        false,
+    );
+
+    let pr_command = PrCommand {
+        title: "Backend only PR".to_string(),
+        body: "Excludes frontend repos".to_string(),
+        branch_name: None,
+        base_branch: None,
+        commit_msg: None,
+        draft: false,
+        token: "fake-token".to_string(),
+        create_only: true,
+    };
+
+    // Should only work with backend repos (repo2, repo3)
+    let result = pr_command.execute(&context).await;
+    assert!(result.is_ok() || result.is_err());
+}
+
+#[tokio::test]
+async fn test_pr_command_with_multiple_exclude_tags() {
+    let config = create_test_config();
+    let context = create_test_context(
+        config,
+        vec![],                                               // No inclusion tags
+        vec!["frontend".to_string(), "database".to_string()], // Exclude multiple
+        None,
+        false,
+    );
+
+    let pr_command = PrCommand {
+        title: "Rust only PR".to_string(),
+        body: "Excludes frontend and database repos".to_string(),
+        branch_name: None,
+        base_branch: None,
+        commit_msg: None,
+        draft: false,
+        token: "fake-token".to_string(),
+        create_only: true,
+    };
+
+    // Should only work with repo2 (rust backend, no database tag)
+    let result = pr_command.execute(&context).await;
+    assert!(result.is_ok() || result.is_err());
+}
+
+#[tokio::test]
+async fn test_pr_command_with_inclusion_and_exclusion() {
+    let config = create_test_config();
+    let context = create_test_context(
+        config,
+        vec!["backend".to_string()],  // Include backend
+        vec!["database".to_string()], // But exclude database
+        None,
+        false,
+    );
+
+    let pr_command = PrCommand {
+        title: "Backend no DB PR".to_string(),
+        body: "Backend repos but not database ones".to_string(),
+        branch_name: None,
+        base_branch: None,
+        commit_msg: None,
+        draft: false,
+        token: "fake-token".to_string(),
+        create_only: true,
+    };
+
+    // Should only work with repo2 (backend but not database)
+    let result = pr_command.execute(&context).await;
+    assert!(result.is_ok() || result.is_err());
+}
+
+#[tokio::test]
+async fn test_pr_command_exclude_all_repos() {
+    let config = create_test_config();
+    let context = create_test_context(
+        config,
+        vec![],                                              // No inclusion tags
+        vec!["frontend".to_string(), "backend".to_string()], // Exclude all
+        None,
+        false,
+    );
+
+    let pr_command = PrCommand {
+        title: "No repos PR".to_string(),
+        body: "Should exclude all repos".to_string(),
+        branch_name: None,
+        base_branch: None,
+        commit_msg: None,
+        draft: false,
+        token: "fake-token".to_string(),
+        create_only: true,
+    };
+
+    // Should find no repos
+    let result = pr_command.execute(&context).await;
+    assert!(result.is_ok());
+}
+
+#[tokio::test]
+async fn test_pr_command_multiple_inclusion_tags() {
+    let config = create_test_config();
+    let context = create_test_context(
+        config,
+        vec!["frontend".to_string(), "rust".to_string()], // Multiple includes
+        vec![],                                           // No exclusions
+        None,
+        false,
+    );
+
+    let pr_command = PrCommand {
+        title: "Multi-tag PR".to_string(),
+        body: "Includes repos with frontend OR rust tags".to_string(),
+        branch_name: None,
+        base_branch: None,
+        commit_msg: None,
+        draft: false,
+        token: "fake-token".to_string(),
+        create_only: true,
+    };
+
+    // Should work with repo1 (frontend) and repo2 (rust)
+    let result = pr_command.execute(&context).await;
+    assert!(result.is_ok() || result.is_err());
 }

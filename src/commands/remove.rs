@@ -12,16 +12,18 @@ pub struct RemoveCommand;
 #[async_trait]
 impl Command for RemoveCommand {
     async fn execute(&self, context: &CommandContext) -> Result<()> {
-        let repositories = context
-            .config
-            .filter_repositories(context.tag.as_deref(), context.repos.as_deref());
+        let repositories = context.config.filter_repositories(
+            &context.tag,
+            &context.exclude_tag,
+            context.repos.as_deref(),
+        );
 
         if repositories.is_empty() {
-            let filter_desc = match (&context.tag, &context.repos) {
-                (Some(tag), Some(repos)) => format!("tag '{tag}' and repositories {repos:?}"),
-                (Some(tag), None) => format!("tag '{tag}'"),
-                (None, Some(repos)) => format!("repositories {repos:?}"),
-                (None, None) => "no repositories found".to_string(),
+            let filter_desc = match (&context.tag.is_empty(), &context.repos) {
+                (false, Some(repos)) => format!("tag {:?} and repositories {repos:?}", context.tag),
+                (false, None) => format!("tag {:?}", context.tag),
+                (true, Some(repos)) => format!("repositories {repos:?}"),
+                (true, None) => "no repositories found".to_string(),
             };
             println!(
                 "{}",
@@ -154,7 +156,8 @@ mod tests {
             config: Config {
                 repositories: vec![repo],
             },
-            tag: None,
+            tag: vec![],
+            exclude_tag: vec![],
             repos: None,
             parallel: false,
         };
@@ -197,7 +200,8 @@ mod tests {
         let command = RemoveCommand;
         let context = CommandContext {
             config: Config { repositories },
-            tag: None,
+            tag: vec![],
+            exclude_tag: vec![],
             repos: None,
             parallel: false,
         };
@@ -245,7 +249,8 @@ mod tests {
         let command = RemoveCommand;
         let context = CommandContext {
             config: Config { repositories },
-            tag: None,
+            tag: vec![],
+            exclude_tag: vec![],
             repos: None,
             parallel: true, // Enable parallel execution
         };
@@ -285,7 +290,8 @@ mod tests {
             config: Config {
                 repositories: vec![repo],
             },
-            tag: None,
+            tag: vec![],
+            exclude_tag: vec![],
             repos: None,
             parallel: false,
         };
@@ -331,7 +337,8 @@ mod tests {
             config: Config {
                 repositories: vec![matching_repo, non_matching_repo],
             },
-            tag: Some("backend".to_string()),
+            tag: vec!["backend".to_string()],
+            exclude_tag: vec![],
             repos: None,
             parallel: false,
         };
@@ -381,7 +388,8 @@ mod tests {
             config: Config {
                 repositories: vec![repo1, repo2],
             },
-            tag: None,
+            tag: vec![],
+            exclude_tag: vec![],
             repos: Some(vec!["repo1".to_string()]), // Only remove repo1
             parallel: false,
         };
@@ -421,7 +429,8 @@ mod tests {
             config: Config {
                 repositories: vec![repo],
             },
-            tag: Some("frontend".to_string()), // Non-matching tag
+            tag: vec!["frontend".to_string()], // Non-matching tag
+            exclude_tag: vec![],
             repos: None,
             parallel: false,
         };
@@ -437,7 +446,8 @@ mod tests {
             config: Config {
                 repositories: vec![],
             },
-            tag: None,
+            tag: vec![],
+            exclude_tag: vec![],
             repos: None,
             parallel: false,
         };
@@ -473,7 +483,8 @@ mod tests {
             config: Config {
                 repositories: vec![repo],
             },
-            tag: None,
+            tag: vec![],
+            exclude_tag: vec![],
             repos: None,
             parallel: false,
         };
@@ -519,7 +530,8 @@ mod tests {
             config: Config {
                 repositories: vec![matching_repo, wrong_name_repo],
             },
-            tag: Some("backend".to_string()),
+            tag: vec!["backend".to_string()],
+            exclude_tag: vec![],
             repos: Some(vec!["matching-repo".to_string()]),
             parallel: false,
         };
@@ -573,7 +585,8 @@ mod tests {
             config: Config {
                 repositories: vec![success_repo, nonexistent_repo],
             },
-            tag: None,
+            tag: vec![],
+            exclude_tag: vec![],
             repos: None,
             parallel: true, // Test parallel execution with mixed scenarios
         };

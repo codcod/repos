@@ -8,8 +8,10 @@ use anyhow::Result;
 pub struct CommandContext {
     /// The loaded configuration
     pub config: Config,
-    /// Optional tag filter for repositories
-    pub tag: Option<String>,
+    /// Tag filters for repositories (can include multiple tags)
+    pub tag: Vec<String>,
+    /// Tags to exclude from repositories
+    pub exclude_tag: Vec<String>,
     /// Whether to execute operations in parallel
     pub parallel: bool,
     /// Optional list of specific repository names to operate on

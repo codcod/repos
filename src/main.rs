@@ -23,9 +23,13 @@ enum Commands {
         #[arg(short, long, default_value_t = constants::config::DEFAULT_CONFIG_FILE.to_string())]
         config: String,
 
-        /// Filter repositories by tag
+        /// Filter repositories by tag (can be specified multiple times)
         #[arg(short, long)]
-        tag: Option<String>,
+        tag: Vec<String>,
+
+        /// Exclude repositories with these tags (can be specified multiple times)
+        #[arg(short = 'e', long)]
+        exclude_tag: Vec<String>,
 
         /// Execute operations in parallel
         #[arg(short, long)]
@@ -44,9 +48,13 @@ enum Commands {
         #[arg(short, long, default_value_t = constants::config::DEFAULT_CONFIG_FILE.to_string())]
         config: String,
 
-        /// Filter repositories by tag
+        /// Filter repositories by tag (can be specified multiple times)
         #[arg(short, long)]
-        tag: Option<String>,
+        tag: Vec<String>,
+
+        /// Exclude repositories with these tags (can be specified multiple times)
+        #[arg(short = 'e', long)]
+        exclude_tag: Vec<String>,
 
         /// Execute operations in parallel
         #[arg(short, long)]
@@ -102,9 +110,13 @@ enum Commands {
         #[arg(short, long, default_value_t = constants::config::DEFAULT_CONFIG_FILE.to_string())]
         config: String,
 
-        /// Filter repositories by tag
+        /// Filter repositories by tag (can be specified multiple times)
         #[arg(short, long)]
-        tag: Option<String>,
+        tag: Vec<String>,
+
+        /// Exclude repositories with these tags (can be specified multiple times)
+        #[arg(short = 'e', long)]
+        exclude_tag: Vec<String>,
 
         /// Execute operations in parallel
         #[arg(short, long)]
@@ -120,9 +132,13 @@ enum Commands {
         #[arg(short, long, default_value_t = constants::config::DEFAULT_CONFIG_FILE.to_string())]
         config: String,
 
-        /// Filter repositories by tag
+        /// Filter repositories by tag (can be specified multiple times)
         #[arg(short, long)]
-        tag: Option<String>,
+        tag: Vec<String>,
+
+        /// Exclude repositories with these tags (can be specified multiple times)
+        #[arg(short = 'e', long)]
+        exclude_tag: Vec<String>,
 
         /// Execute operations in parallel
         #[arg(short, long)]
@@ -155,12 +171,14 @@ async fn main() -> Result<()> {
             repos,
             config,
             tag,
+            exclude_tag,
             parallel,
         } => {
             let config = Config::load_config(&config)?;
             let context = CommandContext {
                 config,
                 tag,
+                exclude_tag,
                 parallel,
                 repos: if repos.is_empty() { None } else { Some(repos) },
             };
@@ -171,6 +189,7 @@ async fn main() -> Result<()> {
             repos,
             config,
             tag,
+            exclude_tag,
             parallel,
             no_save,
             output_dir,
@@ -179,6 +198,7 @@ async fn main() -> Result<()> {
             let context = CommandContext {
                 config,
                 tag,
+                exclude_tag,
                 parallel,
                 repos: if repos.is_empty() { None } else { Some(repos) },
             };
@@ -202,12 +222,14 @@ async fn main() -> Result<()> {
             create_only,
             config,
             tag,
+            exclude_tag,
             parallel,
         } => {
             let config = Config::load_config(&config)?;
             let context = CommandContext {
                 config,
                 tag,
+                exclude_tag,
                 parallel,
                 repos: if repos.is_empty() { None } else { Some(repos) },
             };
@@ -232,12 +254,14 @@ async fn main() -> Result<()> {
             repos,
             config,
             tag,
+            exclude_tag,
             parallel,
         } => {
             let config = Config::load_config(&config)?;
             let context = CommandContext {
                 config,
                 tag,
+                exclude_tag,
                 parallel,
                 repos: if repos.is_empty() { None } else { Some(repos) },
             };
@@ -251,7 +275,8 @@ async fn main() -> Result<()> {
             // Init command doesn't need config since it creates one
             let context = CommandContext {
                 config: Config::new(),
-                tag: None,
+                tag: Vec::new(),
+                exclude_tag: Vec::new(),
                 parallel: false,
                 repos: None,
             };

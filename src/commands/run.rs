@@ -18,9 +18,11 @@ pub struct RunCommand {
 #[async_trait]
 impl Command for RunCommand {
     async fn execute(&self, context: &CommandContext) -> Result<()> {
-        let repositories = context
-            .config
-            .filter_repositories(context.tag.as_deref(), context.repos.as_deref());
+        let repositories = context.config.filter_repositories(
+            &context.tag,
+            &context.exclude_tag,
+            context.repos.as_deref(),
+        );
 
         if repositories.is_empty() {
             return Ok(());

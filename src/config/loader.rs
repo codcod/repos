@@ -188,28 +188,36 @@ impl Config {
         self.filter_by_tag(tag)
     }
 
-    /// Filter repositories by context (combining tag and names filters)
+    /// Filter repositories by context (combining tag inclusion, exclusion, and names filters)
     pub fn filter_repositories(
         &self,
-        tag: Option<&str>,
+        include_tags: &[String],
+        exclude_tags: &[String],
         repos: Option<&[String]>,
     ) -> Vec<Repository> {
-        match (tag, repos) {
-            // If specific repos are specified, filter by names first, then by tag if provided
-            (Some(tag), Some(repo_names)) => {
-                let by_names = self.filter_by_names(repo_names);
-                by_names
-                    .into_iter()
-                    .filter(|repo| repo.has_tag(tag))
-                    .collect()
-            }
-            // If only repos are specified, filter by names only
-            (None, Some(repo_names)) => self.filter_by_names(repo_names),
-            // If only tag is specified, filter by tag only
-            (Some(tag), None) => self.filter_by_tag(Some(tag)),
-            // If neither is specified, return all repositories
-            (None, None) => self.repositories.clone(),
-        }
+        let base_repos = if let Some(repo_names) = repos {
+            // If specific repos are specified, filter by names first
+            self.filter_by_names(repo_names)
+        } else {
+            // Otherwise start with all repositories
+            self.repositories.clone()
+        };
+
+        // Apply both inclusion and exclusion filters in a single pass
+        base_repos
+            .into_iter()
+            .filter(|repo| {
+                // Check inclusion filter: if include_tags is empty, include all; otherwise check if repo has any included tag
+                let included =
+                    include_tags.is_empty() || include_tags.iter().any(|tag| repo.has_tag(tag));
+
+                // Check exclusion filter: if exclude_tags is empty, exclude none; otherwise check if repo has any excluded tag
+                let excluded =
+                    !exclude_tags.is_empty() && exclude_tags.iter().any(|tag| repo.has_tag(tag));
+
+                included && !excluded
+            })
+            .collect()
     }
 }
 
@@ -297,26 +305,31 @@ mod tests {
         let config = create_test_config();
 
         // Test with both tag and repo names
-        let filtered = config.filter_repositories(Some("frontend"), Some(&["repo1".to_string()]));
+        let filtered = config.filter_repositories(
+            &["frontend".to_string()],
+            &[],
+            Some(&["repo1".to_string()]),
+        );
         assert_eq!(filtered.len(), 1);
         assert_eq!(filtered[0].name, "repo1");
 
         // Test with tag and repo names that don't match
-        let filtered = config.filter_repositories(Some("backend"), Some(&["repo1".to_string()]));
+        let filtered =
+            config.filter_repositories(&["backend".to_string()], &[], Some(&["repo1".to_string()]));
         assert_eq!(filtered.len(), 0); // repo1 doesn't have backend tag
 
         // Test with only repo names
-        let filtered = config.filter_repositories(None, Some(&["repo1".to_string()]));
+        let filtered = config.filter_repositories(&[], &[], Some(&["repo1".to_string()]));
         assert_eq!(filtered.len(), 1);
         assert_eq!(filtered[0].name, "repo1");
 
         // Test with only tag
-        let filtered = config.filter_repositories(Some("frontend"), None);
+        let filtered = config.filter_repositories(&["frontend".to_string()], &[], None);
         assert_eq!(filtered.len(), 1);
         assert_eq!(filtered[0].name, "repo1");
 
         // Test with neither (should return all)
-        let filtered = config.filter_repositories(None, None);
+        let filtered = config.filter_repositories(&[], &[], None);
         assert_eq!(filtered.len(), 2);
     }
 
@@ -392,8 +405,11 @@ mod tests {
         let config = create_test_config();
 
         // Non-existent tag with valid names should return empty
-        let filtered =
-            config.filter_repositories(Some("nonexistent"), Some(&["repo1".to_string()]));
+        let filtered = config.filter_repositories(
+            &["nonexistent".to_string()],
+            &[],
+            Some(&["repo1".to_string()]),
+        );
         assert_eq!(filtered.len(), 0);
     }
 
@@ -402,8 +418,11 @@ mod tests {
         let config = create_test_config();
 
         // Valid tag with non-existent names should return empty
-        let filtered =
-            config.filter_repositories(Some("backend"), Some(&["nonexistent".to_string()]));
+        let filtered = config.filter_repositories(
+            &["backend".to_string()],
+            &[],
+            Some(&["nonexistent".to_string()]),
+        );
         assert_eq!(filtered.len(), 0);
     }
 
