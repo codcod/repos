@@ -87,6 +87,10 @@ jobs:
       upload_url: ${{ steps.rel.outputs.upload_url }}
     steps:
       - uses: actions/checkout@v5
+      - name: Configure git
+        run: |
+          git config user.email "action@github.com"
+          git config user.name "GitHub Action"
       - name: Create tag
         run: |
           git fetch --tags
