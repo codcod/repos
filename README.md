@@ -1,65 +1,114 @@
-# Repos: multi-repository management tool
+# Repos: Your Git Super-Tool
 
-Repos is a CLI tool to manage multiple GitHub repositories - clone them, run
-commands across all repositories, create pull requests, and more—all with
-colored output and comprehensive logging.
+**Repos** is a CLI tool designed to streamline the management of multiple Git
+repositories. Whether you need to clone, update, or create pull requests across
+a handful of projects or thousands, `repos` provides the tools to do it
+efficiently. With features like tag-based filtering, parallel execution, and
+comprehensive logging, it's the ultimate utility for developers and DevOps
+engineers working with complex microservice architectures.
 
-## Table of contents
+## Table of Contents
 
 - [Features](#features)
 - [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Commands](#commands)
 - [Configuration](#configuration)
-- [Usage](#usage)
-  - [Repository management](#repository-management)
-  - [Running commands](#running-commands)
-  - [Creating Pull Requests](#creating-pull-requests)
-- [Docker image](#docker-image)
+- [Docker Image](#docker-image)
 - [Contributing](#contributing)
 - [License](#license)
 
 ## Features
 
-- **Multi-repository management**: Clone and manage multiple repositories from a
-single config file
-- **Tag-based filtering**: Run commands on specific repository groups using tags
-- **Parallel execution**: Execute commands across repositories simultaneously
-for faster operations
-- **Colorized output**: Real-time colored logs with repository identification
-- **Comprehensive logging**: Per-repository log files for detailed command
-history
-- **Pull request automation**: Create and manage pull requests across multiple
-repositories
-- **Built in Rust**: Memory-safe, fast, and reliable implementation
+- **Centralized Repository Management**: Define all your repositories in a
+single, easy-to-manage `config.yaml` file.
+- **Tag-Based Filtering**: Assign tags to your repositories and use them to run
+commands on specific subsets of your projects (e.g., `backend`, `frontend`,
+`java`, `rust`).
+- **Inclusion and Exclusion**: Fine-tune your repository selection with both
+include (`--tag`) and exclude (`--exclude-tag`) filters.
+- **Parallel Execution**: Speed up your workflows by running commands across
+multiple repositories simultaneously with the `--parallel` flag.
+- **Pull Request Automation**: Create pull requests across dozens of
+repositories with a single command.
+- **Comprehensive Logging**: Every command run is logged, with detailed,
+per-repository output files for easy debugging.
+- **Built in Rust**: Fast, memory-safe, and reliable.
 
 ## Installation
 
-### From source
-
-```bash
-git clone https://github.com/codcod/repos.git
-cd repos
-cargo build --release
-cp target/release/repos /usr/local/bin/
-```
-
-### Using Cargo
-
-```bash
-cargo install --path .
-```
-
-### Homebrew
+### Homebrew (macOS)
 
 ```bash
 brew tap codcod/taps
 brew install repos
 ```
 
+### Using Cargo
+
+If you have the Rust toolchain installed, you can install `repos` directly from the source:
+
+```bash
+cargo install --path .
+```
+
+### From Source
+
+```bash
+git clone https://github.com/codcod/repos.git
+cd repos
+cargo build --release
+sudo cp target/release/repos /usr/local/bin/
+```
+
+## Quick Start
+
+The easiest way to get started is to let `repos` generate a configuration file
+for you.
+
+1. **Clone your repositories** into a single directory:
+
+   ```bash
+   mkdir my-projects && cd my-projects
+   git clone https://github.com/my-org/project-one.git
+   git clone https://github.com/my-org/project-two.git
+   ```
+
+2. **Generate the config file**:
+   Run `repos init` in the `my-projects` directory. It will scan for Git
+   repositories and create a `config.yaml` file.
+
+   ```bash
+   repos init
+   ```
+
+3. **Start managing your repos!**
+   Now you can run commands across your projects. For example, to see the Git
+   status for all of them:
+
+   ```bash
+   repos run "git status"
+   ```
+
+## Commands
+
+`repos` offers a suite of commands to manage your repositories. Here is a brief
+overview. Click on a command to see its detailed documentation.
+
+| Command | Description |
+|---|---|
+| [**`clone`**](./docs/commands/clone.md) | Clones repositories from your config file. |
+| [**`run`**](./docs/commands/run.md) | Runs a shell command in each repository. |
+| [**`pr`**](./docs/commands/pr.md) | Creates pull requests for repositories with changes. |
+| [**`rm`**](./docs/commands/rm.md) | Removes cloned repositories from your local disk. |
+| [**`init`**](./docs/commands/init.md) | Generates a `config.yaml` file from local Git repositories. |
+
+For a full list of options for any command, run `repos <COMMAND> --help`.
+
 ## Configuration
 
-The `config.yaml` file defines which repositories to manage and how to organize
-them. Repos supports various Git URL formats including GitHub Enterprise
-instances.
+The `config.yaml` file is the heart of `repos`. It defines your repositories and
+their metadata.
 
 ```yaml
 repositories:
@@ -81,247 +130,70 @@ repositories:
     # GitHub Enterprise and custom SSH configurations are supported
 ```
 
-**Tip:** You can clone repositories first and use these to generate your `config.yaml`:
+## Docker Image
+
+You can use `repos` within a Docker container, which is great for CI/CD
+pipelines.
+
+### Build the Image
+
+From the root of the `repos` source directory:
 
 ```bash
-mkdir cloned_repos && cd "$_"
-git clone http://github.com/example/project1.git
-git clone http://github.com/example/project2.git
-repos init
-```
-
-## Typical session
-
-Once you have a configuration file in place, an example session can look like the following:
-
-```bash
-# Remove existing repositories
-repos rm
-
-# Clone rust-based repositories in parallel
-repos clone -t rust -p
-
-# Run command to update dependencies in all repos
-repos run "cargo update"
-
-# Validate changes to see if updates were applied properly
-find . -name "Cargo.lock" -exec ls -la {} \;
-
-# Create pull requests for all changes
-repos pr --title "Update dependencies" --body "Update Cargo.lock files"
-```
-
-## Usage
-
-### Repository management
-
-To configure, clone and remove repositories:
-
-```bash
-# Scan current directory for git repositories
-repos init
-
-# Create a different output file
-repos init -o my-repos-config.yaml
-
-# Overwrite existing config file
-repos init --overwrite
-
-# Clone all repositories
-repos clone
-
-# Clone only repositories with tag "rust"
-repos clone -t rust
-
-# Clone in parallel
-repos clone -p
-
-# Use a custom config file
-repos clone -c custom-config.yaml
-
-# Remove cloned repositories
-repos rm
-
-# Remove only repositories with tag "rust"
-repos rm -t rust
-
-# Remove in parallel
-repos rm -p
-```
-
-### Running commands
-
-To run arbitrary commands in repositories:
-
-```bash
-# Run a command in all repositories
-repos run "cargo check"
-
-# Run a command only in repositories with tag "rust"
-repos run -t rust "cargo build"
-
-# Run in parallel
-repos run -p "cargo test"
-
-# Specify a custom log directory
-repos run -l custom/logs "make build"
-
-# Default behavior (persistent logs)
-repos run "mvn compile"
-
-# Disable persistence
-repos run --no-save "echo test"
-
-# Custom log directory
-repos run --output-dir=/tmp/build-logs "gradle build"
-
-# Search logs
-grep -n "ClassNotFound" logs/runs/*/combined.out
-rg "BUILD FAILURE" logs/runs/
-```
-
-#### Example commands
-
-Example commands to run with `repos run ""`:
-
-```bash
-# Count the number of lines
-find . -type f | wc -l
-
-# Build Rust projects (consider using --parallel flag)
-cargo build
-
-# Update dependencies
-cargo update
-
-# Format code
-cargo fmt
-
-# Run tests
-cargo test
-
-# Create a report of the changes made in the previous month
-git log --all --author='$(id -un)' --since='1 month ago' --pretty=format:'%h %an %ad %s' --date=short
-```
-
-### Creating Pull Requests
-
-Set GITHUB_TOKEN in the environment (or pass via `--token`), then:
-
-```bash
-# Basic: create PRs for repos with changes
-export GITHUB_TOKEN=your_token
-repos pr --title "Update deps" --body "Update Cargo.lock files"
-
-# Use a specific branch name and base branch
-repos pr --branch feature/foo --base develop --title "My change"
-
-# Commit message override and make draft PRs
-repos pr --commit-msg "chore: update deps" --draft
-
-# Only create PR (don't push/commit) — useful for dry-run workflows
-repos pr --create-only
-
-# Filter repositories and run in parallel
-repos pr -t backend -p --title "Backend changes"
-```
-
-Available PR options (CLI flags)
-
-- --title TITLE (required for PR creation)
-- --body BODY
-- --branch / --branch-name NAME (optional)
-- --base BRANCH (optional; defaults to repo default branch — will detect it)
-- --commit-msg MSG (optional)
-- --draft (optional)
-- --create-only (optional)
-- --token TOKEN (optional; otherwise uses GITHUB_TOKEN env var)
-
-## Command reference
-
-```text
-A tool to manage multiple GitHub repositories
-
-Usage: repos [OPTIONS] <COMMAND>
-
-Commands:
-  clone  Clone repositories specified in config
-  run    Run a command in each repository
-  pr     Create pull requests for repositories with changes
-  rm     Remove cloned repositories
-  init   Create a config.yaml file from discovered Git repositories
-  help   Print this message or the help of the given subcommand(s)
-
-Options:
-  -c, --config <CONFIG>  Configuration file path [default: config.yaml]
-  -t, --tag <TAG>        Filter repositories by tag
-  -p, --parallel         Execute operations in parallel
-  -h, --help             Print help
-  -V, --version          Print version
-```
-
-## Dependencies
-
-- `clap` - Command line argument parsing
-- `serde` & `serde_yaml` - Configuration file parsing
-- `tokio` - Async runtime
-- `reqwest` - HTTP client for GitHub API
-- `colored` - Terminal colors
-- `anyhow` - Error handling
-- `chrono` - Date/time operations
-- `walkdir` - Directory traversal
-- `uuid` - Unique ID generation
-
-## Docker image
-
-Quick usage:
-
-```bash
-# build image (from repo root)
 docker build -t repos:latest .
+```
 
-# run help
-docker run --rm repos:latest
+### Run Commands
 
-# run PR command (ensure token passed)
-docker run --rm
+To run a command, you can pass it to the container. Remember to pass your
+`GITHUB_TOKEN` if you're creating pull requests.
+
+```bash
+# View help menu
+docker run --rm repos:latest --help
+
+# Create a pull request
+docker run --rm \
   -e GITHUB_TOKEN="$GITHUB_TOKEN" \
   repos:latest pr --title "fix: update config" --body "Detailed description"
 ```
 
-Tip: mount host workspace if operations need local files:
-`docker run --rm -v "$(pwd):/work" -w /work -e GITHUB_TOKEN="$GITHUB_TOKEN" repos:latest run "ls -la"`
+To operate on local files, mount your current working directory into the
+container:
+
+```bash
+docker run --rm -v "$(pwd):/work" -w /work repos:latest run "ls -la"
+```
 
 ## Contributing
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Run `cargo test` and `cargo fmt`
-6. Submit a pull request
+Contributions are welcome! Please follow these steps:
+
+1. Fork the repository.
+2. Create a feature branch (`git checkout -b feature/my-new-feature`).
+3. Make your changes.
+4. Add tests if applicable.
+5. Run `cargo test` and `cargo fmt` to ensure everything is in order.
+6. Submit a pull request.
 
 ### Documentation
 
-- [Release Guide](docs/release.md) - Release conventions
-- [Semantic Versioning Guide](docs/semantic.md) - How to use semantic versioning
-- [Release Strategy](docs/release-strategy.md) - Release branch strategy and feature aggregation
+- [Release Guide](./docs/release.md)
+- [Semantic Versioning Guide](./docs/semantic.md)
+- [Release Strategy](./docs/release-strategy.md)
 
 ## Alternatives
 
-The following are the alternatives to `repos`:
+If `repos` isn't quite what you're looking for, check out these other great
+tools:
 
-- [gita](https://github.com/nosarthur/gita): A tool to manage multiple Git
-repositories.
-- [gr](http://mixu.net/gr): Another multi-repo management tool.
-- [meta](https://github.com/mateodelnorte/meta): Helps in managing multiple
-repositories.
-- [mu-repo](https://fabioz.github.io/mu-repo): For managing many repositories.
-- [myrepos](https://myrepos.branchable.com): A tool to manage multiple
-repositories.
-- [repo](https://android.googlesource.com/tools/repo): A repository management
-tool often used for Android source code.
+- [gita](https://github.com/nosarthur/gita)
+- [gr](http://mixu.net/gr)
+- [meta](https://github.com/mateodelnorte/meta)
+- [mu-repo](https://fabioz.github.io/mu-repo)
+- [myrepos](https://myrepos.branchable.com)
+- [repo](https://android.googlesource.com/tools/repo)
 
 ## License
 
-MIT
+This project is licensed under the MIT License.
