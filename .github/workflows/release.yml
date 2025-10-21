@@ -9,7 +9,7 @@ on:
 permissions:
   contents: write
   packages: write
-  pull-requests: read
+  pull-requests: write
 
 env:
   CARGO_TERM_COLOR: always
@@ -31,13 +31,13 @@ jobs:
       - id: semver
         uses: PaulHatch/semantic-version@v5.4.0
         with:
-            tag_prefix: "v"
-            major_pattern: "BREAKING CHANGE:"
-            minor_pattern: "feat:"
-            bump_each_commit: false
-            search_commit_body: true
-            user_format_type: "csv"
-            enable_prerelease_mode: true
+          tag_prefix: "v"
+          major_pattern: "BREAKING CHANGE:"
+          minor_pattern: "feat:"
+          bump_each_commit: false
+          search_commit_body: true
+          user_format_type: "csv"
+          enable_prerelease_mode: true
       - name: Fail if no semantic changes
         if: steps.semver.outputs.changed != 'true'
         run: |
@@ -62,10 +62,27 @@ jobs:
       - name: Tests
         run: cargo test --all --locked
 
+  update-version:
+    name: Sync Cargo Version
+    runs-on: ubuntu-latest
+    needs: [semantic-version, test]
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Update Cargo.toml
+        run: |
+          sed -i.bak 's/^version = ".*"/version = "${{ needs.semantic-version.outputs.version }}"/' Cargo.toml && rm Cargo.toml.bak
+          git config user.email "action@github.com"
+          git config user.name "GitHub Action"
+          git add Cargo.toml
+          git commit -m "chore: sync version ${{ needs.semantic-version.outputs.version }}" || echo "No change"
+          git push || true
+
   create-release:
     name: Create GitHub Release
     runs-on: ubuntu-latest
-    needs: [semantic-version, test]
+    needs: [semantic-version, test, update-version]
     outputs:
       upload_url: ${{ steps.rel.outputs.upload_url }}
     steps:
@@ -102,23 +119,6 @@ jobs:
             ${{ needs.semantic-version.outputs.changelog }}
 
             **Full Changelog**: https://github.com/${{ github.repository }}/compare/${{ steps.previous-tag.outputs.tag }}...v${{ needs.semantic-version.outputs.version }}
-
-  update-version:
-    name: Sync Cargo Version
-    runs-on: ubuntu-latest
-    needs: [semantic-version, create-release]
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-      - name: Update Cargo.toml
-        run: |
-          sed -i.bak 's/^version = ".*"/version = "${{ needs.semantic-version.outputs.version }}"/' Cargo.toml && rm Cargo.toml.bak
-          git config user.email "action@github.com"
-          git config user.name "GitHub Action"
-          git add Cargo.toml
-          git commit -m "chore: sync version ${{ needs.semantic-version.outputs.version }}" || echo "No change"
-          git push || true
 
   build-matrix:
     name: Build Targets
@@ -189,3 +189,39 @@ jobs:
         with:
           tag_name: ${{ needs.semantic-version.outputs.version_tag }}
           files: ${{ env.UNIVERSAL }}
+
+  sync-main:
+    name: Sync version back to main
+    runs-on: ubuntu-latest
+    needs: [semantic-version, create-release]
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Fast-forward main
+        run: |
+          RELEASE_BRANCH="${GITHUB_REF_NAME}"
+          git fetch origin main
+          git fetch origin "$RELEASE_BRANCH"
+          git checkout main
+          if git merge --ff-only "origin/$RELEASE_BRANCH"; then
+            git config user.name "GitHub Action"
+            git config user.email "action@github.com"
+            git push origin main
+            echo "FAST_FORWARD=1" >> $GITHUB_ENV
+          else
+            echo "FAST_FORWARD=0" >> $GITHUB_ENV
+          fi
+      - name: Create PR (non fast-forward)
+        if: env.FAST_FORWARD == '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr create \
+            --base main \
+            --head "${GITHUB_REF_NAME}" \
+            --title "chore: sync version ${{ needs.semantic-version.outputs.version }}" \
+            --body "Automatic version sync after release v${{ needs.semantic-version.outputs.version }}."
