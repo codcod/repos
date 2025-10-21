@@ -27,6 +27,10 @@ enum Commands {
         #[arg(short, long)]
         tag: Vec<String>,
 
+        /// Exclude repositories with these tags (can be specified multiple times)
+        #[arg(short = 'e', long)]
+        exclude_tag: Vec<String>,
+
         /// Execute operations in parallel
         #[arg(short, long)]
         parallel: bool,
@@ -49,7 +53,7 @@ enum Commands {
         tag: Vec<String>,
 
         /// Exclude repositories with these tags (can be specified multiple times)
-        #[arg(long)]
+        #[arg(short = 'e', long)]
         exclude_tag: Vec<String>,
 
         /// Execute operations in parallel
@@ -110,6 +114,10 @@ enum Commands {
         #[arg(short, long)]
         tag: Vec<String>,
 
+        /// Exclude repositories with these tags (can be specified multiple times)
+        #[arg(short = 'e', long)]
+        exclude_tag: Vec<String>,
+
         /// Execute operations in parallel
         #[arg(short, long)]
         parallel: bool,
@@ -127,6 +135,10 @@ enum Commands {
         /// Filter repositories by tag (can be specified multiple times)
         #[arg(short, long)]
         tag: Vec<String>,
+
+        /// Exclude repositories with these tags (can be specified multiple times)
+        #[arg(short = 'e', long)]
+        exclude_tag: Vec<String>,
 
         /// Execute operations in parallel
         #[arg(short, long)]
@@ -159,13 +171,14 @@ async fn main() -> Result<()> {
             repos,
             config,
             tag,
+            exclude_tag,
             parallel,
         } => {
             let config = Config::load_config(&config)?;
             let context = CommandContext {
                 config,
                 tag,
-                exclude_tag: Vec::new(),
+                exclude_tag,
                 parallel,
                 repos: if repos.is_empty() { None } else { Some(repos) },
             };
@@ -209,13 +222,14 @@ async fn main() -> Result<()> {
             create_only,
             config,
             tag,
+            exclude_tag,
             parallel,
         } => {
             let config = Config::load_config(&config)?;
             let context = CommandContext {
                 config,
                 tag,
-                exclude_tag: Vec::new(),
+                exclude_tag,
                 parallel,
                 repos: if repos.is_empty() { None } else { Some(repos) },
             };
@@ -240,13 +254,14 @@ async fn main() -> Result<()> {
             repos,
             config,
             tag,
+            exclude_tag,
             parallel,
         } => {
             let config = Config::load_config(&config)?;
             let context = CommandContext {
                 config,
                 tag,
-                exclude_tag: Vec::new(),
+                exclude_tag,
                 parallel,
                 repos: if repos.is_empty() { None } else { Some(repos) },
             };
