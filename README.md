@@ -1,4 +1,4 @@
-# Repos: Your Git Super-Tool
+# Repos: manage multiple GitHub repositories
 
 **Repos** is a CLI tool designed to streamline the management of multiple Git
 repositories. Whether you need to clone, update, or create pull requests across
