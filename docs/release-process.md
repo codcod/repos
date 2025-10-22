@@ -149,3 +149,80 @@ organizing your work.
   - `test:`: Adding or correcting tests.
   - `ci:`: Changes to CI configuration files and scripts.
   - `chore:`: Other changes that don't modify `src` or `test` files.
+
+## A guide for curated (cherry-pick) release
+
+This strategy allows for creating a release that includes only specific,
+hand-picked features or fixes. It is the recommended approach for creating patch
+releases or when you need to control the exact contents of a new version, rather
+than releasing everything that has been merged to `main`.
+
+### How it works
+
+Instead of creating a release branch from `main`, you will create it from the
+most recent release tag. This gives you a clean starting point. You then
+cherry-pick the specific commits you want to include in the release onto this
+new branch.
+
+The automated release workflow will then calculate the new version and changelog
+based *only* on the commits you cherry-picked.
+
+### Step 1: Create a release branch from the latest tag
+
+First, ensure your local repository is up-to-date and find the latest release
+tag.
+
+```bash
+# Fetch all the latest tags and branches from the remote
+git fetch --all --tags
+
+# Find the latest tag (e.g., v0.0.8)
+LATEST_TAG=$(git describe --tags `git rev-list --tags --max-count=1`)
+echo "Latest tag is: $LATEST_TAG"
+
+# Create a new release branch from that tag.
+# Name it something descriptive, like 'release/v0.0.9' or 'release/patch-for-x'
+git checkout -b release/v0.0.9 $LATEST_TAG
+```
+
+You are now on a new branch that is an exact copy of your last release.
+
+### Step 2: Cherry-pick your commits
+
+Identify the commits you want to include in the release. You can find the commit
+SHAs from the `main` branch's log or from a pull request.
+
+```bash
+# Example: Cherry-pick two specific commits
+git cherry-pick <commit-sha-for-feature-A>
+git cherry-pick <commit-sha-for-fix-B>
+```
+
+**Tip for pull requests:** If a PR was squash-merged, it will be a single commit
+*on `main`. You can simply cherry-pick that one merge commit.
+
+If you encounter any merge conflicts during cherry-picking, resolve them, and
+then continue:
+
+```bash
+# After resolving conflicts...
+git add .
+git cherry-pick --continue
+```
+
+### Step 3: Push the branch to trigger the release
+
+Once you have cherry-picked all the desired commits, push the release branch to
+GitHub. This will trigger the automated release workflow.
+
+```bash
+git push -u origin release/v0.0.9
+```
+
+The workflow will now:
+
+1. Analyze *only* the cherry-picked commits.
+2. Calculate the correct semantic version (e.g., `v0.0.9` if you picked a `fix`,
+or `v0.1.0` if you picked a `feat`).
+3. Run tests, build the binaries, and publish the new GitHub Release with a
+changelog containing only the changes you selected.
