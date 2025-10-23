@@ -8,6 +8,9 @@ use colored::*;
 use std::path::Path;
 use walkdir::WalkDir;
 
+#[cfg(test)]
+use serial_test::serial;
+
 /// Init command for creating config from discovered repositories
 pub struct InitCommand {
     pub output: String,
@@ -160,6 +163,7 @@ mod tests {
     use tempfile::TempDir;
 
     #[tokio::test]
+    #[serial]
     async fn test_init_command_no_repositories_found() {
         let temp_dir = TempDir::new().unwrap();
         let original_dir = std::env::current_dir().unwrap();
@@ -242,6 +246,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_init_command_supplement_with_existing_config() {
         let temp_dir = TempDir::new().unwrap();
         let output_path = temp_dir.path().join("existing-config.yaml");
@@ -291,6 +296,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_init_command_supplement_without_existing_config() {
         let temp_dir = TempDir::new().unwrap();
         let output_path = temp_dir.path().join("new-config.yaml");
