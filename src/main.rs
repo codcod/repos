@@ -1,15 +1,20 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use repos::{commands::*, config::Config, constants};
+use repos::{commands::*, config::Config, constants, plugins};
 use std::{env, path::PathBuf};
 
 #[derive(Parser)]
 #[command(name = "repos")]
 #[command(about = "A cli tool to manage multiple GitHub repositories")]
 #[command(version)]
+#[command(allow_external_subcommands = true)]
 struct Cli {
+    /// List all available external plugins
+    #[arg(long)]
+    list_plugins: bool,
+
     #[command(subcommand)]
-    command: Commands,
+    command: Option<Commands>,
 }
 
 #[derive(Subcommand)]
@@ -159,14 +164,62 @@ enum Commands {
         #[arg(long)]
         supplement: bool,
     },
+
+    /// External plugin command
+    #[command(external_subcommand)]
+    External(Vec<String>),
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    // Execute the appropriate command
+    // Handle list-plugins option first
+    if cli.list_plugins {
+        let plugins = plugins::list_external_plugins();
+        if plugins.is_empty() {
+            println!("No external plugins found.");
+            println!(
+                "To create a plugin, make an executable named 'repos-<name>' available in your PATH."
+            );
+        } else {
+            println!("Available external plugins:");
+            for plugin in plugins {
+                println!("  {}", plugin);
+            }
+        }
+        return Ok(());
+    }
+
+    // Handle commands
     match cli.command {
+        Some(Commands::External(args)) => {
+            if args.is_empty() {
+                anyhow::bail!("External command provided but no arguments given");
+            }
+
+            let plugin_name = &args[0];
+            let plugin_args: Vec<String> = args.iter().skip(1).cloned().collect();
+
+            plugins::try_external_plugin(plugin_name, &plugin_args)?;
+        }
+        Some(command) => execute_builtin_command(command).await?,
+        None => {
+            // No command provided, print help
+            anyhow::bail!("No command provided. Use --help for usage information.");
+        }
+    }
+
+    Ok(())
+}
+
+async fn execute_builtin_command(command: Commands) -> Result<()> {
+    // Execute the appropriate command
+    match command {
+        Commands::External(_) => {
+            // These cases are handled in main(), this should not be reached
+            unreachable!("External commands should be handled in main()")
+        }
         Commands::Clone {
             repos,
             config,

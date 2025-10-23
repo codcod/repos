@@ -5,6 +5,7 @@ pub mod config;
 pub mod constants;
 pub mod git;
 pub mod github;
+pub mod plugins;
 pub mod runner;
 pub mod util;
 
