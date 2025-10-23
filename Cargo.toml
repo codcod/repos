@@ -3,6 +3,16 @@ name = "repos"
 version = "0.0.9"
 edition = "2024"
 
+[lib]
+name = "repos"
+path = "src/lib.rs"
+
+[workspace]
+members = [
+    ".",
+    "plugins/repos-health",
+]
+
 [dependencies]
 async-trait = "0.1"
 clap = { version = "4.4", features = ["derive"] }
@@ -22,3 +32,4 @@ uuid = { version = "1.6", features = ["v4"] }
 
 [dev-dependencies]
 tempfile = "3.0"
+serial_test = "3.0"
