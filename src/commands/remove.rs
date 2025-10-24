@@ -200,7 +200,10 @@ mod tests {
 
         let command = RemoveCommand;
         let context = CommandContext {
-            config: Config { repositories, recipes: vec![] },
+            config: Config {
+                repositories,
+                recipes: vec![],
+            },
             tag: vec![],
             exclude_tag: vec![],
             repos: None,
@@ -249,7 +252,10 @@ mod tests {
 
         let command = RemoveCommand;
         let context = CommandContext {
-            config: Config { repositories, recipes: vec![] },
+            config: Config {
+                repositories,
+                recipes: vec![],
+            },
             tag: vec![],
             exclude_tag: vec![],
             repos: None,

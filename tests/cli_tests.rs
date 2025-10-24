@@ -42,7 +42,7 @@ fn test_clone_command_missing_config() {
 #[test]
 fn test_run_command_missing_command_and_recipe() {
     let output = Command::new("cargo")
-        .args(["run", "--", "run", "--config", "test-recipes.yaml"])
+        .args(["run", "--", "run", "--config", "tests/test-recipes.yaml"])
         .output()
         .expect("Failed to execute cargo run");
 

@@ -312,7 +312,7 @@ async fn test_run_command_empty_repositories() {
 
 #[tokio::test]
 async fn test_run_command_basic_execution() {
-    let (_temp_dir, repo, context) = setup_basic_test("test-repo");
+    let (_temp_dir, _repo, context) = setup_basic_test("test-repo");
 
     let command = RunCommand {
         run_type: RunType::Command("echo hello".to_string()),
@@ -430,7 +430,7 @@ async fn test_run_command_existing_output_dir() {
     let output_dir = temp_dir.path().join("already_exists");
     fs::create_dir_all(&output_dir).unwrap(); // Pre-create the directory
 
-    let (_temp_dir, repo, context) = setup_basic_test("test-repo");
+    let (_temp_dir, _repo, context) = setup_basic_test("test-repo");
 
     let command = RunCommand {
         run_type: RunType::Command("echo existing_out_dir".to_string()),
@@ -1209,7 +1209,7 @@ async fn test_multi_step_recipe_sequential() {
 
 #[tokio::test]
 async fn test_recipe_multi_repo_complex_names() {
-    let (_temp_dir, repos, mut context) =
+    let (_temp_dir, _repos, mut context) =
         setup_parallel_test("repo-with-dashes-1", "repo_with_underscores_2");
 
     let recipe = Recipe {

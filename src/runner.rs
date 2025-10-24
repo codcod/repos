@@ -108,31 +108,31 @@ impl CommandRunner {
         let exit_code = status.code().unwrap_or(-1);
 
         // Save output to files if log directory is provided and not skipping log files
-        if let Some(log_dir) = log_dir {
-            if !skip_log_file {
-                // Create repo-specific subdirectory
-                let repo_log_dir = Path::new(log_dir).join(&repo.name);
-                std::fs::create_dir_all(&repo_log_dir)?;
+        if let Some(log_dir) = log_dir
+            && !skip_log_file
+        {
+            // Create repo-specific subdirectory
+            let repo_log_dir = Path::new(log_dir).join(&repo.name);
+            std::fs::create_dir_all(&repo_log_dir)?;
 
-                // Always write info file with command and exit code
-                let info_content = format!(
-                    "Command: {}\nExit Code: {}\nRepository: {}\nTimestamp: {}\n",
-                    command,
-                    exit_code,
-                    repo.name,
-                    chrono::Local::now().format("%Y-%m-%d %H:%M:%S")
-                );
-                let info_file = repo_log_dir.join("info.log");
-                std::fs::write(&info_file, info_content)?;
+            // Always write info file with command and exit code
+            let info_content = format!(
+                "Command: {}\nExit Code: {}\nRepository: {}\nTimestamp: {}\n",
+                command,
+                exit_code,
+                repo.name,
+                chrono::Local::now().format("%Y-%m-%d %H:%M:%S")
+            );
+            let info_file = repo_log_dir.join("info.log");
+            std::fs::write(&info_file, info_content)?;
 
-                // Write stdout to file (even if empty, to show it was captured)
-                let stdout_file = repo_log_dir.join("stdout.log");
-                std::fs::write(&stdout_file, &stdout_content)?;
+            // Write stdout to file (even if empty, to show it was captured)
+            let stdout_file = repo_log_dir.join("stdout.log");
+            std::fs::write(&stdout_file, &stdout_content)?;
 
-                // Write stderr to file (even if empty, to show it was captured)
-                let stderr_file = repo_log_dir.join("stderr.log");
-                std::fs::write(&stderr_file, &stderr_content)?;
-            }
+            // Write stderr to file (even if empty, to show it was captured)
+            let stderr_file = repo_log_dir.join("stderr.log");
+            std::fs::write(&stderr_file, &stderr_content)?;
         }
 
         // Always return the captured output, regardless of exit code
