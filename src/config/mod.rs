@@ -6,6 +6,6 @@ pub mod repository;
 pub mod validation;
 
 pub use builder::RepositoryBuilder;
-pub use loader::Config;
+pub use loader::{Config, Recipe};
 pub use repository::Repository;
 pub use validation::ConfigValidator;

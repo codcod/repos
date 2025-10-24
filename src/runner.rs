@@ -45,8 +45,8 @@ impl CommandRunner {
         &self,
         repo: &Repository,
         command: &str,
-        _log_dir: Option<&str>,
-        _skip_log_file: bool,
+        log_dir: Option<&str>,
+        skip_log_file: bool,
     ) -> Result<(String, String, i32)> {
         let repo_dir = repo.get_target_dir();
 
@@ -55,7 +55,6 @@ impl CommandRunner {
             anyhow::bail!("Repository directory does not exist: {}", repo_dir);
         }
 
-        // No longer create log files - all output handled by persist system
         self.logger.info(repo, &format!("Running '{command}'"));
 
         // Execute command
@@ -108,6 +107,34 @@ impl CommandRunner {
         let status = cmd.wait()?;
         let exit_code = status.code().unwrap_or(-1);
 
+        // Save output to files if log directory is provided and not skipping log files
+        if let Some(log_dir) = log_dir {
+            if !skip_log_file {
+                // Create repo-specific subdirectory
+                let repo_log_dir = Path::new(log_dir).join(&repo.name);
+                std::fs::create_dir_all(&repo_log_dir)?;
+
+                // Always write info file with command and exit code
+                let info_content = format!(
+                    "Command: {}\nExit Code: {}\nRepository: {}\nTimestamp: {}\n",
+                    command,
+                    exit_code,
+                    repo.name,
+                    chrono::Local::now().format("%Y-%m-%d %H:%M:%S")
+                );
+                let info_file = repo_log_dir.join("info.log");
+                std::fs::write(&info_file, info_content)?;
+
+                // Write stdout to file (even if empty, to show it was captured)
+                let stdout_file = repo_log_dir.join("stdout.log");
+                std::fs::write(&stdout_file, &stdout_content)?;
+
+                // Write stderr to file (even if empty, to show it was captured)
+                let stderr_file = repo_log_dir.join("stderr.log");
+                std::fs::write(&stderr_file, &stderr_content)?;
+            }
+        }
+
         // Always return the captured output, regardless of exit code
         // This allows the caller to decide how to handle failures and still log the output
         Ok((stdout_content, stderr_content, exit_code))
@@ -126,7 +153,6 @@ impl CommandRunner {
             anyhow::bail!("Repository directory does not exist: {}", repo_dir);
         }
 
-        // No longer create log files - all output is handled by the new persist system
         self.logger.info(repo, &format!("Running '{command}'"));
 
         // Execute command
@@ -295,24 +321,26 @@ mod tests {
         let log_dir_str = log_dir.to_string_lossy().to_string();
 
         let result = runner
-            .run_command(&repo, "echo 'Logged output'", Some(&log_dir_str))
+            .run_command_with_capture(&repo, "echo 'Logged output'", Some(&log_dir_str))
             .await;
         assert!(result.is_ok());
 
-        // No log files are created anymore - the persist system handles output capture
-        // The log_dir parameter is no longer used for file creation
-        let log_files: Vec<_> = if log_dir.exists() {
-            fs::read_dir(&log_dir)
-                .unwrap()
-                .filter_map(Result::ok)
-                .collect()
-        } else {
-            Vec::new()
-        };
-        assert!(
-            log_files.is_empty(),
-            "No log files should be created - use persist system instead"
-        );
+        // Verify log files are created in repo-specific subdirectory
+        let repo_log_dir = log_dir.join(&repo.name);
+        assert!(repo_log_dir.exists(), "Repo log directory should exist");
+
+        let stdout_file = repo_log_dir.join("stdout.log");
+        let info_file = repo_log_dir.join("info.log");
+
+        assert!(stdout_file.exists(), "stdout.log should exist");
+        assert!(info_file.exists(), "info.log should exist");
+
+        let stdout_content = std::fs::read_to_string(&stdout_file).unwrap();
+        assert!(stdout_content.contains("Logged output"));
+
+        let info_content = std::fs::read_to_string(&info_file).unwrap();
+        assert!(info_content.contains("Command: echo 'Logged output'"));
+        assert!(info_content.contains("Exit Code: 0"));
     }
 
     #[tokio::test]
@@ -325,7 +353,7 @@ mod tests {
         let log_dir_str = log_dir.to_string_lossy().to_string();
 
         let result = runner
-            .run_command(
+            .run_command_with_capture(
                 &repo,
                 "echo 'stdout message'; echo 'stderr message' >&2",
                 Some(&log_dir_str),
@@ -333,19 +361,26 @@ mod tests {
             .await;
         assert!(result.is_ok());
 
-        // Verify no log files are created (we now use persist system instead)
-        let log_files: Vec<_> = if log_dir.exists() {
-            fs::read_dir(&log_dir)
-                .unwrap()
-                .filter_map(Result::ok)
-                .collect()
-        } else {
-            Vec::new()
-        };
-        assert!(
-            log_files.is_empty(),
-            "No log files should be created with new persist-only system"
-        );
+        // Verify log files are created with proper content
+        let repo_log_dir = log_dir.join(&repo.name);
+        assert!(repo_log_dir.exists(), "Repo log directory should exist");
+
+        let stdout_file = repo_log_dir.join("stdout.log");
+        let stderr_file = repo_log_dir.join("stderr.log");
+        let info_file = repo_log_dir.join("info.log");
+
+        assert!(stdout_file.exists(), "stdout.log should exist");
+        assert!(stderr_file.exists(), "stderr.log should exist");
+        assert!(info_file.exists(), "info.log should exist");
+
+        let stdout_content = std::fs::read_to_string(&stdout_file).unwrap();
+        assert!(stdout_content.contains("stdout message"));
+
+        let stderr_content = std::fs::read_to_string(&stderr_file).unwrap();
+        assert!(stderr_content.contains("stderr message"));
+
+        let info_content = std::fs::read_to_string(&info_file).unwrap();
+        assert!(info_content.contains("Exit Code: 0"));
     }
 
     #[tokio::test]

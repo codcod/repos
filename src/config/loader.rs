@@ -6,8 +6,16 @@ use serde::{Deserialize, Serialize};
 use std::path::Path;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Recipe {
+    pub name: String,
+    pub steps: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     pub repositories: Vec<Repository>,
+    #[serde(default)]
+    pub recipes: Vec<Recipe>,
 }
 
 impl Config {
@@ -175,7 +183,13 @@ impl Config {
     pub fn new() -> Self {
         Self {
             repositories: Vec::new(),
+            recipes: Vec::new(),
         }
+    }
+
+    /// Find a recipe by name
+    pub fn find_recipe(&self, name: &str) -> Option<&Recipe> {
+        self.recipes.iter().find(|r| r.name == name)
     }
 
     /// Alias for load method for backwards compatibility
@@ -248,6 +262,7 @@ mod tests {
 
         Config {
             repositories: vec![repo1, repo2],
+            recipes: Vec::new(),
         }
     }
 

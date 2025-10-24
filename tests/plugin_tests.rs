@@ -36,8 +36,16 @@ exit 0
         String::from_utf8_lossy(&output.stderr)
     );
 
+    // Verify binary exists before trying to run it
+    let binary_path = "./target/debug/repos";
+    assert!(
+        std::path::Path::new(binary_path).exists(),
+        "Binary not found at {}",
+        binary_path
+    );
+
     // Test list-plugins with our mock plugin
-    let output = Command::new("./target/debug/repos")
+    let output = Command::new(binary_path)
         .arg("--list-plugins")
         .env(
             "PATH",
@@ -56,7 +64,7 @@ exit 0
     assert!(stdout.contains("health"));
 
     // Test calling the external plugin
-    let output = Command::new("./target/debug/repos")
+    let output = Command::new(binary_path)
         .args(["health", "--test", "argument"])
         .env(
             "PATH",
@@ -75,7 +83,7 @@ exit 0
     assert!(stdout.contains("Args: --test argument"));
 
     // Test non-existent plugin
-    let output = Command::new("./target/debug/repos")
+    let output = Command::new(binary_path)
         .arg("nonexistent")
         .output()
         .expect("Failed to run nonexistent plugin");
@@ -93,10 +101,22 @@ fn test_builtin_commands_still_work() {
         .output()
         .expect("Failed to build project");
 
-    assert!(output.status.success());
+    assert!(
+        output.status.success(),
+        "Failed to build: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    // Verify binary exists before trying to run it
+    let binary_path = "./target/debug/repos";
+    assert!(
+        std::path::Path::new(binary_path).exists(),
+        "Binary not found at {}",
+        binary_path
+    );
 
     // Test help command
-    let output = Command::new("./target/debug/repos")
+    let output = Command::new(binary_path)
         .arg("--help")
         .output()
         .expect("Failed to run help");
@@ -108,7 +128,7 @@ fn test_builtin_commands_still_work() {
     assert!(stdout.contains("clone"));
 
     // Test list-plugins when no plugins are available
-    let output = Command::new("./target/debug/repos")
+    let output = Command::new(binary_path)
         .arg("--list-plugins")
         .env("PATH", "/nonexistent") // Empty PATH
         .output()

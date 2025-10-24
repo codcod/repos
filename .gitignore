@@ -27,6 +27,8 @@ Thumbs.db
 # Project specific
 cloned_repos*/
 coverage/
+*.profraw
 logs/
 config.yaml
 tarpaulin-report.html
+test-*/

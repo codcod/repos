@@ -155,6 +155,7 @@ mod tests {
         let context = CommandContext {
             config: Config {
                 repositories: vec![repo],
+                recipes: vec![],
             },
             tag: vec![],
             exclude_tag: vec![],
@@ -199,7 +200,7 @@ mod tests {
 
         let command = RemoveCommand;
         let context = CommandContext {
-            config: Config { repositories },
+            config: Config { repositories, recipes: vec![] },
             tag: vec![],
             exclude_tag: vec![],
             repos: None,
@@ -248,7 +249,7 @@ mod tests {
 
         let command = RemoveCommand;
         let context = CommandContext {
-            config: Config { repositories },
+            config: Config { repositories, recipes: vec![] },
             tag: vec![],
             exclude_tag: vec![],
             repos: None,
@@ -289,6 +290,7 @@ mod tests {
         let context = CommandContext {
             config: Config {
                 repositories: vec![repo],
+                recipes: vec![],
             },
             tag: vec![],
             exclude_tag: vec![],
@@ -336,6 +338,7 @@ mod tests {
         let context = CommandContext {
             config: Config {
                 repositories: vec![matching_repo, non_matching_repo],
+                recipes: vec![],
             },
             tag: vec!["backend".to_string()],
             exclude_tag: vec![],
@@ -387,6 +390,7 @@ mod tests {
         let context = CommandContext {
             config: Config {
                 repositories: vec![repo1, repo2],
+                recipes: vec![],
             },
             tag: vec![],
             exclude_tag: vec![],
@@ -428,6 +432,7 @@ mod tests {
         let context = CommandContext {
             config: Config {
                 repositories: vec![repo],
+                recipes: vec![],
             },
             tag: vec!["frontend".to_string()], // Non-matching tag
             exclude_tag: vec![],
@@ -445,6 +450,7 @@ mod tests {
         let context = CommandContext {
             config: Config {
                 repositories: vec![],
+                recipes: vec![],
             },
             tag: vec![],
             exclude_tag: vec![],
@@ -482,6 +488,7 @@ mod tests {
         let context = CommandContext {
             config: Config {
                 repositories: vec![repo],
+                recipes: vec![],
             },
             tag: vec![],
             exclude_tag: vec![],
@@ -529,6 +536,7 @@ mod tests {
         let context = CommandContext {
             config: Config {
                 repositories: vec![matching_repo, wrong_name_repo],
+                recipes: vec![],
             },
             tag: vec!["backend".to_string()],
             exclude_tag: vec![],
@@ -584,6 +592,7 @@ mod tests {
         let context = CommandContext {
             config: Config {
                 repositories: vec![success_repo, nonexistent_repo],
+                recipes: vec![],
             },
             tag: vec![],
             exclude_tag: vec![],

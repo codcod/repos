@@ -40,15 +40,16 @@ fn test_clone_command_missing_config() {
 }
 
 #[test]
-fn test_run_command_missing_command_arg() {
+fn test_run_command_missing_command_and_recipe() {
     let output = Command::new("cargo")
-        .args(["run", "--", "run"])
+        .args(["run", "--", "run", "--config", "test-recipes.yaml"])
         .output()
         .expect("Failed to execute cargo run");
 
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("required") || stderr.contains("missing"));
+    // Should fail because neither command nor recipe is provided
+    assert!(stderr.contains("Either --recipe or a command must be provided"));
 }
 
 #[test]

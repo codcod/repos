@@ -151,6 +151,7 @@ mod tests {
 
         Config {
             repositories: vec![repo1, repo2, repo3],
+            recipes: vec![],
         }
     }
 
@@ -301,6 +302,7 @@ mod tests {
 
         let config = Config {
             repositories: vec![invalid_repo],
+            recipes: vec![],
         };
 
         let command = CloneCommand;
@@ -344,6 +346,7 @@ mod tests {
 
         let config = Config {
             repositories: vec![invalid_repo1, invalid_repo2],
+            recipes: vec![],
         };
 
         let command = CloneCommand;
@@ -392,6 +395,7 @@ mod tests {
         // Test with empty configuration
         let config = Config {
             repositories: vec![],
+            recipes: vec![],
         };
 
         let command = CloneCommand;

@@ -44,7 +44,11 @@ enum Commands {
     /// Run a command in each repository
     Run {
         /// Command to execute
-        command: String,
+        command: Option<String>,
+
+        /// Name of a recipe defined in config.yaml
+        #[arg(long, conflicts_with = "command")]
+        recipe: Option<String>,
 
         /// Specific repository names to run command in (if not provided, uses tag filter or all repos)
         repos: Vec<String>,
@@ -239,6 +243,7 @@ async fn execute_builtin_command(command: Commands) -> Result<()> {
         }
         Commands::Run {
             command,
+            recipe,
             repos,
             config,
             tag,
@@ -255,13 +260,30 @@ async fn execute_builtin_command(command: Commands) -> Result<()> {
                 parallel,
                 repos: if repos.is_empty() { None } else { Some(repos) },
             };
-            RunCommand {
-                command,
-                no_save,
-                output_dir: output_dir.map(PathBuf::from),
+
+            // Validate that exactly one of command or recipe is provided
+            match (command.as_ref(), recipe.as_ref()) {
+                (Some(cmd), None) => {
+                    RunCommand::new_command(cmd.clone(), no_save, output_dir.map(PathBuf::from))
+                        .execute(&context)
+                        .await?;
+                }
+                (None, Some(recipe_name)) => {
+                    RunCommand::new_recipe(
+                        recipe_name.clone(),
+                        no_save,
+                        output_dir.map(PathBuf::from),
+                    )
+                    .execute(&context)
+                    .await?;
+                }
+                (None, None) => {
+                    anyhow::bail!("Either --recipe or a command must be provided");
+                }
+                (Some(_), Some(_)) => {
+                    anyhow::bail!("Cannot specify both command and --recipe");
+                }
             }
-            .execute(&context)
-            .await?;
         }
         Commands::Pr {
             repos,

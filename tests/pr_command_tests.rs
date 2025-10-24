@@ -30,6 +30,7 @@ fn create_test_config() -> Config {
 
     Config {
         repositories: vec![repo1, repo2, repo3],
+        recipes: vec![],
     }
 }
 
@@ -169,6 +170,7 @@ async fn test_pr_command_no_matching_repositories() {
 async fn test_pr_command_empty_repositories() {
     let config = Config {
         repositories: vec![],
+        recipes: vec![],
     };
     let context = create_test_context(config, vec![], vec![], None, false);
 

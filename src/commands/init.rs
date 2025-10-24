@@ -181,6 +181,7 @@ mod tests {
         let context = CommandContext {
             config: Config {
                 repositories: vec![],
+                recipes: vec![],
             },
             tag: vec![],
             exclude_tag: vec![],
@@ -215,6 +216,7 @@ mod tests {
         let context = CommandContext {
             config: Config {
                 repositories: vec![],
+                recipes: vec![],
             },
             tag: vec![],
             exclude_tag: vec![],
@@ -257,6 +259,7 @@ mod tests {
                 "existing-repo".to_string(),
                 "git@github.com:owner/existing-repo.git".to_string(),
             )],
+            recipes: vec![],
         };
         existing_config
             .save(&output_path.to_string_lossy())
@@ -276,6 +279,7 @@ mod tests {
         let context = CommandContext {
             config: Config {
                 repositories: vec![],
+                recipes: vec![],
             },
             tag: vec![],
             exclude_tag: vec![],
@@ -314,6 +318,7 @@ mod tests {
         let context = CommandContext {
             config: Config {
                 repositories: vec![],
+                recipes: vec![],
             },
             tag: vec![],
             exclude_tag: vec![],
