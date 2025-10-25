@@ -1274,14 +1274,14 @@ async fn test_run_command_creates_logs_with_content() {
 
     // Check for log files in the repository subdirectory
     let stdout_log = repo_log_dir.join("stdout.log");
-    let info_log = repo_log_dir.join("info.log");
+    let metadata_log = repo_log_dir.join("metadata.json");
 
     assert!(stdout_log.exists(), "stdout.log should be created");
-    assert!(info_log.exists(), "info.log should be created");
+    assert!(metadata_log.exists(), "metadata.json should be created");
 
     // Verify log file contents
     let stdout_content = fs::read_to_string(&stdout_log).unwrap();
-    let info_content = fs::read_to_string(&info_log).unwrap();
+    let metadata_content = fs::read_to_string(&metadata_log).unwrap();
 
     // stdout.log should contain the echo output
     assert!(
@@ -1291,11 +1291,36 @@ async fn test_run_command_creates_logs_with_content() {
         stdout_content
     );
 
-    // info.log should contain execution information
+    // metadata.json should contain execution information
+    let metadata: serde_json::Value = serde_json::from_str(&metadata_content).unwrap();
+    assert_eq!(metadata["repository"], "test-repo");
+    assert_eq!(metadata["exit_code"], 0);
+    assert_eq!(metadata["exit_code_description"], "success");
+
+    // Validate that recipe and command fields are mutually exclusive
     assert!(
-        info_content.contains("test-repo"),
-        "info.log should contain repo name: 'test-repo', but was: '{}'",
-        info_content
+        metadata.get("command").is_some(),
+        "metadata.json should contain 'command' field when running a command, but was: '{}'",
+        metadata_content
+    );
+    assert!(
+        metadata.get("recipe").is_none(),
+        "metadata.json should NOT contain 'recipe' field when running a command, but was: '{}'",
+        metadata_content
+    );
+    assert!(
+        metadata.get("recipe_steps").is_none(),
+        "metadata.json should NOT contain 'recipe_steps' field when running a command, but was: '{}'",
+        metadata_content
+    );
+
+    assert!(
+        metadata["repository"]
+            .as_str()
+            .unwrap()
+            .contains("test-repo"),
+        "metadata.json should contain repo name: 'test-repo', but was: '{}'",
+        metadata_content
     );
 }
 
@@ -1346,14 +1371,14 @@ async fn test_run_recipe_creates_logs_with_content() {
 
     // Check for log files in the repository subdirectory
     let stdout_log = repo_log_dir.join("stdout.log");
-    let info_log = repo_log_dir.join("info.log");
+    let metadata_log = repo_log_dir.join("metadata.json");
 
     assert!(stdout_log.exists(), "stdout.log should be created");
-    assert!(info_log.exists(), "info.log should be created");
+    assert!(metadata_log.exists(), "metadata.json should be created");
 
     // Verify log file contents
     let stdout_content = fs::read_to_string(&stdout_log).unwrap();
-    let info_content = fs::read_to_string(&info_log).unwrap();
+    let metadata_content = fs::read_to_string(&metadata_log).unwrap();
 
     // stdout.log should contain the recipe output
     assert!(
@@ -1363,10 +1388,40 @@ async fn test_run_recipe_creates_logs_with_content() {
         stdout_content
     );
 
-    // info.log should contain execution information
+    // metadata.json should contain execution information
+    let metadata: serde_json::Value = serde_json::from_str(&metadata_content).unwrap();
+    assert_eq!(metadata["repository"], "test-repo");
+    assert_eq!(metadata["recipe"], "log-test-recipe");
+    assert_eq!(metadata["exit_code"], 0);
+    assert_eq!(metadata["exit_code_description"], "success");
+
+    // Validate that recipe and command fields are mutually exclusive
     assert!(
-        info_content.contains("test-repo") && info_content.contains("log-test-recipe"),
-        "info.log should contain repo name and recipe name, but was: '{}'",
-        info_content
+        metadata.get("command").is_none(),
+        "metadata.json should NOT contain 'command' field when running a recipe, but was: '{}'",
+        metadata_content
+    );
+    assert!(
+        metadata.get("recipe").is_some(),
+        "metadata.json should contain 'recipe' field when running a recipe, but was: '{}'",
+        metadata_content
+    );
+    assert!(
+        metadata.get("recipe_steps").is_some(),
+        "metadata.json should contain 'recipe_steps' field when running a recipe, but was: '{}'",
+        metadata_content
+    );
+
+    assert!(
+        metadata["repository"]
+            .as_str()
+            .unwrap()
+            .contains("test-repo")
+            && metadata["recipe"]
+                .as_str()
+                .unwrap()
+                .contains("log-test-recipe"),
+        "metadata.json should contain repo name and recipe name, but was: '{}'",
+        metadata_content
     );
 }

@@ -215,10 +215,12 @@ impl RunCommand {
                         let runner = CommandRunner::new();
                         let result = if let Some(ref run_root) = run_root {
                             runner
-                                .run_command_with_capture(
+                                .run_command_with_recipe_context(
                                     &repo,
                                     &relative_script_path,
                                     Some(run_root.to_string_lossy().as_ref()),
+                                    &recipe_name,
+                                    &recipe_steps,
                                 )
                                 .await
                         } else {
@@ -254,10 +256,12 @@ impl RunCommand {
 
                 let result = if let Some(ref run_root) = run_root {
                     runner
-                        .run_command_with_capture(
+                        .run_command_with_recipe_context(
                             &repo,
                             &relative_script_path,
                             Some(run_root.to_string_lossy().as_ref()),
+                            &recipe.name,
+                            &recipe.steps,
                         )
                         .await
                 } else {

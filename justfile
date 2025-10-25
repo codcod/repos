@@ -16,7 +16,7 @@ build-plugins:
 # Run tests
 [group('qa')]
 test:
-    cargo test
+    cargo test --quiet
 
 # Run coverage
 [group('qa')]

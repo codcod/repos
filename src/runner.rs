@@ -3,10 +3,17 @@
 use crate::config::Repository;
 use crate::git::Logger;
 use anyhow::Result;
+use serde_json;
 
 use std::io::{BufRead, BufReader};
 use std::path::Path;
 use std::process::{Command, Stdio};
+
+#[derive(Debug, Clone)]
+struct RecipeContext {
+    name: String,
+    steps: Vec<String>,
+}
 
 #[derive(Default)]
 pub struct CommandRunner {
@@ -18,6 +25,21 @@ impl CommandRunner {
         Self::default()
     }
 
+    /// Get a human-readable description of an exit code
+    fn get_exit_code_description(exit_code: i32) -> &'static str {
+        match exit_code {
+            0 => "success",
+            1 => "general error",
+            2 => "misuse of shell builtins",
+            126 => "command invoked cannot execute",
+            127 => "command not found",
+            128 => "invalid argument to exit",
+            130 => "script terminated by Control-C",
+            _ if exit_code > 128 => "terminated by signal",
+            _ => "error",
+        }
+    }
+
     /// Run command and capture output for the new logging system
     pub async fn run_command_with_capture(
         &self,
@@ -25,7 +47,24 @@ impl CommandRunner {
         command: &str,
         log_dir: Option<&str>,
     ) -> Result<(String, String, i32)> {
-        self.run_command_with_capture_internal(repo, command, log_dir, false)
+        self.run_command_with_capture_internal(repo, command, log_dir, false, None)
+            .await
+    }
+
+    /// Run command with recipe context and capture output for the new logging system
+    pub async fn run_command_with_recipe_context(
+        &self,
+        repo: &Repository,
+        command: &str,
+        log_dir: Option<&str>,
+        recipe_name: &str,
+        recipe_steps: &[String],
+    ) -> Result<(String, String, i32)> {
+        let recipe_context = Some(RecipeContext {
+            name: recipe_name.to_string(),
+            steps: recipe_steps.to_vec(),
+        });
+        self.run_command_with_capture_internal(repo, command, log_dir, false, recipe_context)
             .await
     }
 
@@ -36,7 +75,7 @@ impl CommandRunner {
         command: &str,
         log_dir: Option<&str>,
     ) -> Result<(String, String, i32)> {
-        self.run_command_with_capture_internal(repo, command, log_dir, true)
+        self.run_command_with_capture_internal(repo, command, log_dir, true, None)
             .await
     }
 
@@ -47,6 +86,7 @@ impl CommandRunner {
         command: &str,
         log_dir: Option<&str>,
         skip_log_file: bool,
+        recipe_context: Option<RecipeContext>,
     ) -> Result<(String, String, i32)> {
         let repo_dir = repo.get_target_dir();
 
@@ -115,16 +155,31 @@ impl CommandRunner {
             let repo_log_dir = Path::new(log_dir).join(&repo.name);
             std::fs::create_dir_all(&repo_log_dir)?;
 
-            // Always write info file with command and exit code
-            let info_content = format!(
-                "Command: {}\nExit Code: {}\nRepository: {}\nTimestamp: {}\n",
-                command,
-                exit_code,
-                repo.name,
-                chrono::Local::now().format("%Y-%m-%d %H:%M:%S")
-            );
-            let info_file = repo_log_dir.join("info.log");
-            std::fs::write(&info_file, info_content)?;
+            // Always write metadata file with command and exit code in JSON format
+            let exit_code_description = Self::get_exit_code_description(exit_code);
+            let metadata_content = if let Some(ref recipe_ctx) = recipe_context {
+                serde_json::json!({
+                    "recipe": recipe_ctx.name,
+                    "exit_code": exit_code,
+                    "exit_code_description": exit_code_description,
+                    "repository": repo.name,
+                    "timestamp": chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
+                    "recipe_steps": recipe_ctx.steps
+                })
+            } else {
+                serde_json::json!({
+                    "command": command,
+                    "exit_code": exit_code,
+                    "exit_code_description": exit_code_description,
+                    "repository": repo.name,
+                    "timestamp": chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string()
+                })
+            };
+            let metadata_file = repo_log_dir.join("metadata.json");
+            std::fs::write(
+                &metadata_file,
+                serde_json::to_string_pretty(&metadata_content)?,
+            )?;
 
             // Write stdout to file (even if empty, to show it was captured)
             let stdout_file = repo_log_dir.join("stdout.log");
@@ -330,17 +385,19 @@ mod tests {
         assert!(repo_log_dir.exists(), "Repo log directory should exist");
 
         let stdout_file = repo_log_dir.join("stdout.log");
-        let info_file = repo_log_dir.join("info.log");
+        let metadata_file = repo_log_dir.join("metadata.json");
 
         assert!(stdout_file.exists(), "stdout.log should exist");
-        assert!(info_file.exists(), "info.log should exist");
+        assert!(metadata_file.exists(), "metadata.json should exist");
 
         let stdout_content = std::fs::read_to_string(&stdout_file).unwrap();
         assert!(stdout_content.contains("Logged output"));
 
-        let info_content = std::fs::read_to_string(&info_file).unwrap();
-        assert!(info_content.contains("Command: echo 'Logged output'"));
-        assert!(info_content.contains("Exit Code: 0"));
+        let metadata_content = std::fs::read_to_string(&metadata_file).unwrap();
+        let metadata: serde_json::Value = serde_json::from_str(&metadata_content).unwrap();
+        assert_eq!(metadata["command"], "echo 'Logged output'");
+        assert_eq!(metadata["exit_code"], 0);
+        assert_eq!(metadata["exit_code_description"], "success");
     }
 
     #[tokio::test]
@@ -367,11 +424,11 @@ mod tests {
 
         let stdout_file = repo_log_dir.join("stdout.log");
         let stderr_file = repo_log_dir.join("stderr.log");
-        let info_file = repo_log_dir.join("info.log");
+        let metadata_file = repo_log_dir.join("metadata.json");
 
         assert!(stdout_file.exists(), "stdout.log should exist");
         assert!(stderr_file.exists(), "stderr.log should exist");
-        assert!(info_file.exists(), "info.log should exist");
+        assert!(metadata_file.exists(), "metadata.json should exist");
 
         let stdout_content = std::fs::read_to_string(&stdout_file).unwrap();
         assert!(stdout_content.contains("stdout message"));
@@ -379,8 +436,10 @@ mod tests {
         let stderr_content = std::fs::read_to_string(&stderr_file).unwrap();
         assert!(stderr_content.contains("stderr message"));
 
-        let info_content = std::fs::read_to_string(&info_file).unwrap();
-        assert!(info_content.contains("Exit Code: 0"));
+        let metadata_content = std::fs::read_to_string(&metadata_file).unwrap();
+        let metadata: serde_json::Value = serde_json::from_str(&metadata_content).unwrap();
+        assert_eq!(metadata["exit_code"], 0);
+        assert_eq!(metadata["exit_code_description"], "success");
     }
 
     #[tokio::test]

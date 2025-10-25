@@ -33,6 +33,10 @@ multiple repositories simultaneously with the `--parallel` flag.
 repositories with a single command.
 - **Comprehensive Logging**: Every command run is logged, with detailed,
 per-repository output files for easy debugging.
+- **Reusable Command Recipes**: Define multi-step scripts in your config and run
+them across repositories with a simple name.
+- **Extensible Plugin System**: Add custom commands by creating simple
+`repos-<name>` executables in your `PATH`.
 - **Built in Rust**: Fast, memory-safe, and reliable.
 
 ## Installation
@@ -98,7 +102,7 @@ overview. Click on a command to see its detailed documentation.
 | Command | Description |
 |---|---|
 | [**`clone`**](./docs/commands/clone.md) | Clones repositories from your config file. |
-| [**`run`**](./docs/commands/run.md) | Runs a shell command in each repository. |
+| [**`run`**](./docs/commands/run.md) | Runs a shell command or a pre-defined recipe in each repository. |
 | [**`pr`**](./docs/commands/pr.md) | Creates pull requests for repositories with changes. |
 | [**`rm`**](./docs/commands/rm.md) | Removes cloned repositories from your local disk. |
 | [**`init`**](./docs/commands/init.md) | Generates a `config.yaml` file from local Git repositories. |
@@ -128,7 +132,27 @@ repositories:
     url: git@github-enterprise:company/project.git
     tags: [enterprise, backend]
     # GitHub Enterprise and custom SSH configurations are supported
+
+recipes:
+  - name: setup
+    steps:
+      git checkout main
+      git pull
+      ./scripts/setup.sh
 ```
+
+## Plugins
+
+`repos` supports an extensible plugin system that allows you to add new
+functionality without modifying the core codebase. Any executable in your `PATH`
+named `repos-<plugin>` can be invoked as a subcommand.
+
+- **List available plugins**: `repos --list-plugins`
+- **Execute a plugin**: `repos <plugin-name> [args...]`
+
+This allows for powerful, custom workflows written in any language. For a
+detailed guide on creating and using plugins, see the
+[Plugin System Documentation](./docs/plugins.md).
 
 ## Docker Image
 
