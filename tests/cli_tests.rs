@@ -48,6 +48,13 @@ fn test_run_command_missing_command_and_recipe() {
 
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    
+    // Debug output for CI
+    eprintln!("EXIT CODE: {}", output.status);
+    eprintln!("STDERR: '{}'", stderr);
+    eprintln!("STDOUT: '{}'", stdout);
+    
     // Should fail because neither command nor recipe is provided
     assert!(stderr.contains("Either --recipe or a command must be provided"));
 }
@@ -70,6 +77,13 @@ fn test_run_command_both_command_and_recipe() {
 
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    
+    // Debug output for CI
+    eprintln!("EXIT CODE: {}", output.status);
+    eprintln!("STDERR: '{}'", stderr);
+    eprintln!("STDOUT: '{}'", stdout);
+    
     // Should fail because both command and recipe are provided
     assert!(stderr.contains("Cannot specify both command and --recipe"));
 }
