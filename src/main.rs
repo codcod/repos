@@ -266,23 +266,31 @@ async fn execute_builtin_command(command: Commands) -> Result<()> {
                 repos: if repos.is_empty() { None } else { Some(repos) },
             };
 
+            // Normalize command - treat empty strings as None
+            let command = command.filter(|s| !s.trim().is_empty());
+
             // Validate that exactly one of command or recipe is provided
-            if command.is_none() && recipe.is_none() {
-                anyhow::bail!("Either --recipe or a command must be provided");
-            }
-
-            if command.is_some() && recipe.is_some() {
-                anyhow::bail!("Cannot specify both command and --recipe");
-            }
-
-            if let Some(cmd) = command {
-                RunCommand::new_command(cmd, no_save, output_dir.map(PathBuf::from))
+            match (command.as_ref(), recipe.as_ref()) {
+                (Some(cmd), None) => {
+                    RunCommand::new_command(cmd.clone(), no_save, output_dir.map(PathBuf::from))
+                        .execute(&context)
+                        .await?;
+                }
+                (None, Some(recipe_name)) => {
+                    RunCommand::new_recipe(
+                        recipe_name.clone(),
+                        no_save,
+                        output_dir.map(PathBuf::from),
+                    )
                     .execute(&context)
                     .await?;
-            } else if let Some(recipe_name) = recipe {
-                RunCommand::new_recipe(recipe_name, no_save, output_dir.map(PathBuf::from))
-                    .execute(&context)
-                    .await?;
+                }
+                (None, None) => {
+                    anyhow::bail!("Either --recipe or a command must be provided");
+                }
+                (Some(_), Some(_)) => {
+                    anyhow::bail!("Cannot specify both command and --recipe");
+                }
             }
         }
         Commands::Pr {
