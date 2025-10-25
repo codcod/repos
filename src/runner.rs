@@ -190,6 +190,26 @@ impl CommandRunner {
             std::fs::write(&stderr_file, &stderr_content)?;
         }
 
+        // Log completion with exit code and description
+        let exit_code_description = Self::get_exit_code_description(exit_code);
+        if let Some(ref recipe_ctx) = recipe_context {
+            self.logger.info(
+                repo,
+                &format!(
+                    "Recipe '{}' ended with exit code {} ({})",
+                    recipe_ctx.name, exit_code, exit_code_description
+                ),
+            );
+        } else {
+            self.logger.info(
+                repo,
+                &format!(
+                    "Command '{}' ended with exit code {} ({})",
+                    command, exit_code, exit_code_description
+                ),
+            );
+        }
+
         // Always return the captured output, regardless of exit code
         // This allows the caller to decide how to handle failures and still log the output
         Ok((stdout_content, stderr_content, exit_code))
@@ -217,11 +237,19 @@ impl CommandRunner {
             .current_dir(&repo_dir)
             .status()?;
 
+        let exit_code = status.code().unwrap_or(-1);
+        let exit_code_description = Self::get_exit_code_description(exit_code);
+
+        self.logger.info(
+            repo,
+            &format!(
+                "Command '{}' ended with exit code {} ({})",
+                command, exit_code, exit_code_description
+            ),
+        );
+
         if !status.success() {
-            anyhow::bail!(
-                "Command failed with exit code: {}",
-                status.code().unwrap_or(-1)
-            );
+            anyhow::bail!("Command failed with exit code: {}", exit_code);
         }
 
         Ok(())

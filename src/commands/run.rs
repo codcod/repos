@@ -212,12 +212,19 @@ impl RunCommand {
                             .unwrap_or(&script_path)
                             .to_string_lossy();
 
+                        // Ensure script path is executable from current directory
+                        let executable_script_path = if relative_script_path.contains('/') {
+                            relative_script_path.to_string()
+                        } else {
+                            format!("./{}", relative_script_path)
+                        };
+
                         let runner = CommandRunner::new();
                         let result = if let Some(ref run_root) = run_root {
                             runner
                                 .run_command_with_recipe_context(
                                     &repo,
-                                    &relative_script_path,
+                                    &executable_script_path,
                                     Some(run_root.to_string_lossy().as_ref()),
                                     &recipe_name,
                                     &recipe_steps,
@@ -227,7 +234,7 @@ impl RunCommand {
                             runner
                                 .run_command_with_capture_no_logs(
                                     &repo,
-                                    &relative_script_path,
+                                    &executable_script_path,
                                     None,
                                 )
                                 .await
@@ -254,11 +261,18 @@ impl RunCommand {
                     .unwrap_or(&script_path)
                     .to_string_lossy();
 
+                // Ensure script path is executable from current directory
+                let executable_script_path = if relative_script_path.contains('/') {
+                    relative_script_path.to_string()
+                } else {
+                    format!("./{}", relative_script_path)
+                };
+
                 let result = if let Some(ref run_root) = run_root {
                     runner
                         .run_command_with_recipe_context(
                             &repo,
-                            &relative_script_path,
+                            &executable_script_path,
                             Some(run_root.to_string_lossy().as_ref()),
                             &recipe.name,
                             &recipe.steps,
@@ -266,7 +280,7 @@ impl RunCommand {
                         .await
                 } else {
                     runner
-                        .run_command_with_capture_no_logs(&repo, &relative_script_path, None)
+                        .run_command_with_capture_no_logs(&repo, &executable_script_path, None)
                         .await
                 };
                 // Optionally remove script file after execution
@@ -285,11 +299,10 @@ impl RunCommand {
     ) -> Result<PathBuf> {
         let target_dir = repo.get_target_dir();
         let repo_path = Path::new(&target_dir);
-        let recipes_dir = repo_path.join(".repos").join("recipes");
-        create_dir_all(&recipes_dir)?;
 
+        // Create script directly in the repository root
         let script_label = Self::sanitize_script_name(recipe_name);
-        let script_path = recipes_dir.join(format!("{}.script", script_label));
+        let script_path = repo_path.join(format!("{}.script", script_label));
 
         // Join all steps with newlines to create the script content
         let script_content = steps.join("\n");
