@@ -264,6 +264,9 @@ async fn execute_builtin_command(command: Commands) -> Result<()> {
 
             // Validate that exactly one of command or recipe is provided
             match (command.as_ref(), recipe.as_ref()) {
+                (Some(cmd), None) if cmd.trim().is_empty() => {
+                    anyhow::bail!("Either --recipe or a command must be provided");
+                }
                 (Some(cmd), None) => {
                     RunCommand::new_command(cmd.clone(), no_save, output_dir.map(PathBuf::from))
                         .execute(&context)
