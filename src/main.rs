@@ -44,7 +44,11 @@ enum Commands {
     /// Run a command in each repository
     Run {
         /// Command to execute
-        #[arg(value_name = "COMMAND", help = "Command to execute")]
+        #[arg(
+            value_name = "COMMAND",
+            help = "Command to execute",
+            allow_hyphen_values = true
+        )]
         command: Option<String>,
 
         /// Name of a recipe defined in config.yaml
