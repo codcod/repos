@@ -267,30 +267,22 @@ async fn execute_builtin_command(command: Commands) -> Result<()> {
             };
 
             // Validate that exactly one of command or recipe is provided
-            match (command.as_ref(), recipe.as_ref()) {
-                (Some(cmd), None) if cmd.trim().is_empty() => {
-                    anyhow::bail!("Either --recipe or a command must be provided");
-                }
-                (Some(cmd), None) => {
-                    RunCommand::new_command(cmd.clone(), no_save, output_dir.map(PathBuf::from))
-                        .execute(&context)
-                        .await?;
-                }
-                (None, Some(recipe_name)) => {
-                    RunCommand::new_recipe(
-                        recipe_name.clone(),
-                        no_save,
-                        output_dir.map(PathBuf::from),
-                    )
+            if command.is_none() && recipe.is_none() {
+                anyhow::bail!("Either --recipe or a command must be provided");
+            }
+
+            if command.is_some() && recipe.is_some() {
+                anyhow::bail!("Cannot specify both command and --recipe");
+            }
+
+            if let Some(cmd) = command {
+                RunCommand::new_command(cmd, no_save, output_dir.map(PathBuf::from))
                     .execute(&context)
                     .await?;
-                }
-                (None, None) => {
-                    anyhow::bail!("Either --recipe or a command must be provided");
-                }
-                (Some(_cmd), Some(_recipe_name)) => {
-                    anyhow::bail!("Cannot specify both command and --recipe");
-                }
+            } else if let Some(recipe_name) = recipe {
+                RunCommand::new_recipe(recipe_name, no_save, output_dir.map(PathBuf::from))
+                    .execute(&context)
+                    .await?;
             }
         }
         Commands::Pr {
