@@ -53,6 +53,28 @@ fn test_run_command_missing_command_and_recipe() {
 }
 
 #[test]
+fn test_run_command_both_command_and_recipe() {
+    let output = Command::new("cargo")
+        .args([
+            "run",
+            "--",
+            "run",
+            "--recipe",
+            "test-recipe",
+            "echo hello",
+            "--config",
+            "tests/test-recipes.yaml",
+        ])
+        .output()
+        .expect("Failed to execute cargo run");
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    // Should fail because both command and recipe are provided
+    assert!(stderr.contains("Cannot specify both command and --recipe"));
+}
+
+#[test]
 fn test_pr_command_missing_required_args() {
     let output = Command::new("cargo")
         .args(["run", "--", "pr"])

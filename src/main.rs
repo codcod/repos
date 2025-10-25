@@ -48,7 +48,7 @@ enum Commands {
         command: Option<String>,
 
         /// Name of a recipe defined in config.yaml
-        #[arg(long, conflicts_with = "command")]
+        #[arg(long)]
         recipe: Option<String>,
 
         /// Specific repository names to run command in (if not provided, uses tag filter or all repos)
