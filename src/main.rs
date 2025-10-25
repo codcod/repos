@@ -44,11 +44,11 @@ enum Commands {
     /// Run a command in each repository
     Run {
         /// Command to execute
-        #[arg(value_name = "COMMAND")]
+        #[arg(value_name = "COMMAND", help = "Command to execute")]
         command: Option<String>,
 
         /// Name of a recipe defined in config.yaml
-        #[arg(long)]
+        #[arg(long, help = "Name of a recipe defined in config.yaml")]
         recipe: Option<String>,
 
         /// Specific repository names to run command in (if not provided, uses tag filter or all repos)
@@ -263,16 +263,20 @@ async fn execute_builtin_command(command: Commands) -> Result<()> {
             };
 
             // Validate that exactly one of command or recipe is provided
+            eprintln!("DEBUG: command = {:?}, recipe = {:?}", command, recipe);
             match (command.as_ref(), recipe.as_ref()) {
                 (Some(cmd), None) if cmd.trim().is_empty() => {
+                    eprintln!("DEBUG: Empty command case");
                     anyhow::bail!("Either --recipe or a command must be provided");
                 }
                 (Some(cmd), None) => {
+                    eprintln!("DEBUG: Command only case: {}", cmd);
                     RunCommand::new_command(cmd.clone(), no_save, output_dir.map(PathBuf::from))
                         .execute(&context)
                         .await?;
                 }
                 (None, Some(recipe_name)) => {
+                    eprintln!("DEBUG: Recipe only case: {}", recipe_name);
                     RunCommand::new_recipe(
                         recipe_name.clone(),
                         no_save,
@@ -282,9 +286,11 @@ async fn execute_builtin_command(command: Commands) -> Result<()> {
                     .await?;
                 }
                 (None, None) => {
+                    eprintln!("DEBUG: Neither case");
                     anyhow::bail!("Either --recipe or a command must be provided");
                 }
-                (Some(_), Some(_)) => {
+                (Some(cmd), Some(recipe_name)) => {
+                    eprintln!("DEBUG: Both case: {} and {}", cmd, recipe_name);
                     anyhow::bail!("Cannot specify both command and --recipe");
                 }
             }
