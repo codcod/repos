@@ -566,6 +566,7 @@ Classification criteria:
 |1.5 Empty repositories list| Unit | Behavior is early-return logic| ✅ Automated |
 |1.6 Empty recipes list| Unit | Lookup logic and conditional absence handling| ⚠️ Partial - needs dedicated tests |
 |1.7 Resolve recipe names uniquely| Unit | Name lookup & matching only| ✅ Automated |
+|Symlink repository path resolution| Integration | FS symlink target resolution & safety| ❌ Gap |
 
 ### 18.2 Repository Management
 
@@ -615,6 +616,7 @@ Classification criteria:
 |4.10 Cleanup on failure| Integration | Execution + post-failure cleanup| ✅ Automated |
 |4.11 Exit codes propagate| Integration | Real failing script status| ✅ Automated |
 |4.12 Mixed success/failure halts| Integration | Execution control flow| ⚠️ Partial - needs verification |
+|Unicode script name sanitization| Unit | Ensures generated script filename handles Unicode safely| ❌ Gap |
 
 ### 18.5 Logging & Output
 
@@ -626,6 +628,7 @@ Classification criteria:
 |5.4 Timestamp format| Unit | Formatting function| Gap |
 |5.5 Directory naming pattern| Unit | String assembly + sanitization| Partial |
 |5.6 Truncation behavior| Unit | String length logic| Automated |
+|Simultaneous runs distinct timestamps| Integration | Parallel invocations produce non-colliding directories| ❌ Gap |
 
 ### 18.6 Parallel vs Sequential Behavior
 
@@ -663,6 +666,7 @@ All considered Integration (multi-repo orchestration). Stress/performance varian
 |9.4 Fallback when no plugins present| Integration | Graceful empty state | Automated |
 |9.5 Help text still accessible with plugins| E2E | Full CLI parsing with dynamic plugin context | Gap |
 |9.6 Plugin does not interfere with core logging| Integration | Compare logs with/without plugins | Partial |
+|Multiple plugins simultaneously| Integration | Validates isolation & non-interference with more than one plugin | ❌ Gap |
 
 ### 18.10 Pull Requests
 
