@@ -44,7 +44,12 @@ enum Commands {
     /// Run a command in each repository
     Run {
         /// Command to execute
-        command: String,
+        #[arg(value_name = "COMMAND", help = "Command to execute")]
+        command: Option<String>,
+
+        /// Name of a recipe defined in config.yaml
+        #[arg(long, help = "Name of a recipe defined in config.yaml")]
+        recipe: Option<String>,
 
         /// Specific repository names to run command in (if not provided, uses tag filter or all repos)
         repos: Vec<String>,
@@ -239,6 +244,7 @@ async fn execute_builtin_command(command: Commands) -> Result<()> {
         }
         Commands::Run {
             command,
+            recipe,
             repos,
             config,
             tag,
@@ -255,13 +261,25 @@ async fn execute_builtin_command(command: Commands) -> Result<()> {
                 parallel,
                 repos: if repos.is_empty() { None } else { Some(repos) },
             };
-            RunCommand {
-                command,
-                no_save,
-                output_dir: output_dir.map(PathBuf::from),
+
+            // Validate that exactly one of command or recipe is provided
+            if command.is_none() && recipe.is_none() {
+                anyhow::bail!("Either --recipe or a command must be provided");
             }
-            .execute(&context)
-            .await?;
+
+            if command.is_some() && recipe.is_some() {
+                anyhow::bail!("Cannot specify both command and --recipe");
+            }
+
+            if let Some(cmd) = command {
+                RunCommand::new_command(cmd, no_save, output_dir.map(PathBuf::from))
+                    .execute(&context)
+                    .await?;
+            } else if let Some(recipe_name) = recipe {
+                RunCommand::new_recipe(recipe_name, no_save, output_dir.map(PathBuf::from))
+                    .execute(&context)
+                    .await?;
+            }
         }
         Commands::Pr {
             repos,

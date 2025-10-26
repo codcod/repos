@@ -1,28 +1,33 @@
 # repos run
 
-The `run` command executes a shell command in each of the specified
-repositories.
+The `run` command executes a shell command or a named recipe in each of the
+specified repositories.
 
 ## Usage
 
 ```bash
-repos run [OPTIONS] <COMMAND> [REPOS]...
+repos run [OPTIONS] <COMMAND_OR_RECIPE> [REPOS]...
 ```
 
 ## Description
 
 This is one of the most powerful commands in `repos`, allowing you to automate
 tasks across hundreds or thousands of repositories at once. You can run any
-shell command, from simple `ls` to complex `docker build` or `terraform apply`
-scripts.
+shell command, from simple `ls` to complex `docker build` scripts.
 
-By default, the output of each command is logged to a file in the `logs/runs/`
+Additionally, you can define **recipes**—multi-step scripts—in your
+`config.yaml` and execute them by name. This is perfect for standardizing
+complex workflows like dependency updates, code generation, or release
+preparation.
+
+By default, the output of each command is logged to a file in the `output/runs/`
 directory, but this can be disabled.
 
 ## Arguments
 
-- `<COMMAND>`: The shell command to execute in each repository. It should be
-enclosed in quotes if it contains spaces or special characters.
+- `<COMMAND_OR_RECIPE>`: The shell command to execute or the name of the recipe
+to run. If it is a command, it should be enclosed in quotes if it contains
+spaces or special characters.
 - `[REPOS]...`: A space-separated list of specific repository names to run the
 command in. If not provided, filtering will be based on tags.
 
@@ -34,12 +39,44 @@ command in. If not provided, filtering will be based on tags.
 (OR logic).
 - `-e, --exclude-tag <EXCLUDE_TAG>`: Exclude repositories with a specific tag.
 Can be specified multiple times.
-- `-p, --parallel`: Execute the command in parallel across all selected
-repositories.
+- `-p, --parallel`: Execute the command or recipe in parallel across all
+selected repositories.
 - `--no-save`: Disables saving the command output to log files.
 - `--output-dir <OUTPUT_DIR>`: Specifies a custom directory for log files
-instead of the default `logs/runs`.
+instead of the default `output/runs`.
 - `-h, --help`: Prints help information.
+
+## Recipes
+
+Recipes are named, multi-step scripts defined in your `config.yaml`. They allow
+you to codify and reuse common workflows.
+
+### Defining a Recipe
+
+Add a `recipes` section to your `config.yaml`:
+
+```yaml
+recipes:
+  - name: update-deps
+    steps: >
+      git checkout main
+      git pull
+      cargo update
+      cargo build --release
+
+  - name: test
+    steps:
+      - |
+        cargo test --all-features
+        run: cargo clippy
+```
+
+Each recipe has a `name` and a list of `steps`. Each step is a shell command
+executed sequentially.
+
+### Running a Recipe
+
+To run a recipe, use its name as the main argument for the `run` command.
 
 ## Examples
 
@@ -81,10 +118,18 @@ This is highly recommended for long-running commands to save time.
 repos run -p "docker build ."
 ```
 
-### Run a command without saving logs
+### Run a command without saving output
 
 Useful for quick, simple commands where you don't need a record of the output.
 
 ```bash
 repos run --no-save "ls -la"
 ```
+
+### Run the 'update-deps' recipe on all repositories
+
+repos run --recipe update-deps
+
+### Run the 'test' recipe on backend repositories in parallel
+
+repos run -t backend -p --recipe test

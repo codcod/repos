@@ -20,6 +20,21 @@ colored output and comprehensive logging.
 - **Preserve existing code style, naming, and patterns**
 - **Add code only when absolutely necessary to fix the specific issue**
 - **When fixing bugs, change only what's broken, not what could be improved**
+- **To understand code coverage, run `cargo tarpaulin --skip-clean`. Be patient while it runs, as it may take some time to complete.**
+
+## Testing Standards
+
+- **Maintain test-inventory.md with test cases for features, update test case status regularly**
+- **Maintain high test coverage (aim for 80%)**
+
+### Unit Tests
+
+- **Write unit tests for all new functionality**
+- **Use descriptive test names and organize tests logically**
+
+### Integration Tests
+
+- **Write integration tests for critical workflows**
 
 ## Documentation Standards
 

@@ -24,21 +24,9 @@ exit 0
     perms.set_mode(0o755);
     fs::set_permissions(&plugin_path, perms).unwrap();
 
-    // Build the project
-    let output = Command::new("cargo")
-        .args(["build", "--quiet"])
-        .output()
-        .expect("Failed to build project");
-
-    assert!(
-        output.status.success(),
-        "Failed to build: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-
     // Test list-plugins with our mock plugin
-    let output = Command::new("./target/debug/repos")
-        .arg("--list-plugins")
+    let output = Command::new("cargo")
+        .args(["run", "--", "--list-plugins"])
         .env(
             "PATH",
             format!(
@@ -56,8 +44,8 @@ exit 0
     assert!(stdout.contains("health"));
 
     // Test calling the external plugin
-    let output = Command::new("./target/debug/repos")
-        .args(["health", "--test", "argument"])
+    let output = Command::new("cargo")
+        .args(["run", "--", "health", "--test", "argument"])
         .env(
             "PATH",
             format!(
@@ -75,8 +63,8 @@ exit 0
     assert!(stdout.contains("Args: --test argument"));
 
     // Test non-existent plugin
-    let output = Command::new("./target/debug/repos")
-        .arg("nonexistent")
+    let output = Command::new("cargo")
+        .args(["run", "--", "nonexistent"])
         .output()
         .expect("Failed to run nonexistent plugin");
 
@@ -88,16 +76,10 @@ exit 0
 #[test]
 fn test_builtin_commands_still_work() {
     // Ensure built-in commands are not affected by plugin system
-    let output = Command::new("cargo")
-        .args(["build", "--quiet"])
-        .output()
-        .expect("Failed to build project");
-
-    assert!(output.status.success());
 
     // Test help command
-    let output = Command::new("./target/debug/repos")
-        .arg("--help")
+    let output = Command::new("cargo")
+        .args(["run", "--", "--help"])
         .output()
         .expect("Failed to run help");
 
@@ -108,9 +90,17 @@ fn test_builtin_commands_still_work() {
     assert!(stdout.contains("clone"));
 
     // Test list-plugins when no plugins are available
-    let output = Command::new("./target/debug/repos")
-        .arg("--list-plugins")
-        .env("PATH", "/nonexistent") // Empty PATH
+    let temp_empty_dir = TempDir::new().unwrap();
+    let output = Command::new("cargo")
+        .args(["run", "--", "--list-plugins"])
+        .env(
+            "PATH",
+            format!(
+                "{}:{}",
+                temp_empty_dir.path().display(),
+                std::env::var("PATH").unwrap_or_default()
+            ),
+        )
         .output()
         .expect("Failed to run list-plugins");
 

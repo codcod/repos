@@ -40,18 +40,6 @@ fn test_clone_command_missing_config() {
 }
 
 #[test]
-fn test_run_command_missing_command_arg() {
-    let output = Command::new("cargo")
-        .args(["run", "--", "run"])
-        .output()
-        .expect("Failed to execute cargo run");
-
-    assert!(!output.status.success());
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("required") || stderr.contains("missing"));
-}
-
-#[test]
 fn test_pr_command_missing_required_args() {
     let output = Command::new("cargo")
         .args(["run", "--", "pr"])

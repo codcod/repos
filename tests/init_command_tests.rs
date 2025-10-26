@@ -201,6 +201,7 @@ async fn test_init_command_supplement_with_duplicate_repository() {
             "test-repo".to_string(),
             "git@github.com:owner/test-repo.git".to_string(),
         )],
+        recipes: vec![],
     };
     existing_config
         .save(&output_path.to_string_lossy())
@@ -250,6 +251,7 @@ async fn test_init_command_supplement_with_new_repository() {
             "existing-repo".to_string(),
             "git@github.com:owner/existing-repo.git".to_string(),
         )],
+        recipes: vec![],
     };
     existing_config
         .save(&output_path.to_string_lossy())
