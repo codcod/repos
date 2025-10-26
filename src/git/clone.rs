@@ -63,12 +63,15 @@ pub fn clone_repository(repo: &Repository) -> Result<()> {
 
 /// Remove a cloned repository directory
 pub fn remove_repository(repo: &Repository) -> Result<()> {
+    let logger = Logger;
     let target_dir = repo.get_target_dir();
 
     if Path::new(&target_dir).exists() {
         std::fs::remove_dir_all(&target_dir).context("Failed to remove repository directory")?;
+        logger.success(repo, "Removed");
         Ok(())
     } else {
+        logger.info(repo, "Directory does not exist");
         anyhow::bail!("Repository directory does not exist: {}", target_dir);
     }
 }
