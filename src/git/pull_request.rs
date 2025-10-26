@@ -1,85 +1,25 @@
-//! Git operations using system git commands for maximum compatibility
+//! Git operations for pull request workflows
+//!
+//! This module contains git operations that are commonly used in pull request
+//! workflows, including checking for changes, creating branches, staging and
+//! committing changes, and pushing branches to remotes.
+//!
+//! ## Typical PR Workflow
+//!
+//! 1. [`has_changes`] - Check if repository has uncommitted changes
+//! 2. [`create_and_checkout_branch`] - Create and switch to a new branch
+//! 3. [`add_all_changes`] - Stage all changes for commit
+//! 4. [`commit_changes`] - Commit the staged changes with a message
+//! 5. [`push_branch`] - Push the branch to the remote repository
+//!
+//! ## Additional Utilities
+//!
+//! - [`get_default_branch`] - Determine the repository's default branch
 
-use crate::config::Repository;
 use anyhow::{Context, Result};
-use colored::*;
-use std::path::Path;
 use std::process::Command;
 
-#[derive(Default)]
-pub struct Logger;
-
-impl Logger {
-    pub fn info(&self, repo: &Repository, msg: &str) {
-        println!("{} | {}", repo.name.cyan().bold(), msg);
-    }
-
-    pub fn success(&self, repo: &Repository, msg: &str) {
-        println!("{} | {}", repo.name.cyan().bold(), msg.green());
-    }
-
-    pub fn warn(&self, repo: &Repository, msg: &str) {
-        println!("{} | {}", repo.name.cyan().bold(), msg.yellow());
-    }
-
-    #[allow(dead_code)]
-    pub fn error(&self, repo: &Repository, msg: &str) {
-        eprintln!("{} | {}", repo.name.cyan().bold(), msg.red());
-    }
-}
-
-pub fn clone_repository(repo: &Repository) -> Result<()> {
-    let logger = Logger;
-    let target_dir = repo.get_target_dir();
-
-    // Check if directory already exists
-    if Path::new(&target_dir).exists() {
-        logger.warn(repo, "Repository directory already exists, skipping");
-        return Ok(());
-    }
-
-    let mut args = vec!["clone"];
-
-    // Add branch flag if a branch is specified
-    if let Some(branch) = &repo.branch {
-        args.extend_from_slice(&["-b", branch]);
-        logger.info(
-            repo,
-            &format!("Cloning branch '{}' from {}", branch, repo.url),
-        );
-    } else {
-        logger.info(repo, &format!("Cloning default branch from {}", repo.url));
-    }
-
-    // Add repository URL and target directory
-    args.push(&repo.url);
-    args.push(&target_dir);
-
-    let output = Command::new("git")
-        .args(&args)
-        .output()
-        .context("Failed to execute git clone command")?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        anyhow::bail!("Failed to clone repository: {}", stderr);
-    }
-
-    logger.success(repo, "Successfully cloned");
-    Ok(())
-}
-
-pub fn remove_repository(repo: &Repository) -> Result<()> {
-    let target_dir = repo.get_target_dir();
-
-    if Path::new(&target_dir).exists() {
-        std::fs::remove_dir_all(&target_dir).context("Failed to remove repository directory")?;
-        Ok(())
-    } else {
-        anyhow::bail!("Repository directory does not exist: {}", target_dir);
-    }
-}
-
+/// Check if a repository has uncommitted changes
 pub fn has_changes(repo_path: &str) -> Result<bool> {
     // Check if there are any uncommitted changes using git status
     let output = Command::new("git")
@@ -100,6 +40,7 @@ pub fn has_changes(repo_path: &str) -> Result<bool> {
     Ok(!output.stdout.is_empty())
 }
 
+/// Create and checkout a new branch
 pub fn create_and_checkout_branch(repo_path: &str, branch_name: &str) -> Result<()> {
     // Create and checkout a new branch using git checkout -b
     let output = Command::new("git")
@@ -121,6 +62,7 @@ pub fn create_and_checkout_branch(repo_path: &str, branch_name: &str) -> Result<
     Ok(())
 }
 
+/// Add all changes to the staging area
 pub fn add_all_changes(repo_path: &str) -> Result<()> {
     // Add all changes using git add .
     let output = Command::new("git")
@@ -140,6 +82,7 @@ pub fn add_all_changes(repo_path: &str) -> Result<()> {
     Ok(())
 }
 
+/// Commit staged changes with a message
 pub fn commit_changes(repo_path: &str, message: &str) -> Result<()> {
     // Commit changes using git commit
     let output = Command::new("git")
@@ -160,6 +103,7 @@ pub fn commit_changes(repo_path: &str, message: &str) -> Result<()> {
     Ok(())
 }
 
+/// Push a branch to remote and set upstream
 pub fn push_branch(repo_path: &str, branch_name: &str) -> Result<()> {
     // Push branch using git push
     let output = Command::new("git")
@@ -181,6 +125,7 @@ pub fn push_branch(repo_path: &str, branch_name: &str) -> Result<()> {
     Ok(())
 }
 
+/// Get the default branch of a repository
 pub fn get_default_branch(repo_path: &str) -> Result<String> {
     // Try to get the default branch using git symbolic-ref
     let output = Command::new("git")
