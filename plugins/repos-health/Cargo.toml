@@ -15,3 +15,6 @@ chrono = { version = "0.4", features = ["serde"] }
 
 [dependencies.repos]
 path = "../.."
+
+[dev-dependencies]
+tempfile = "3"

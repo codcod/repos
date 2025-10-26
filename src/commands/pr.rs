@@ -142,3 +142,176 @@ impl Command for PrCommand {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::{Config, Repository};
+
+    #[tokio::test]
+    async fn test_pr_command_no_repositories() {
+        let config = Config {
+            repositories: vec![],
+            recipes: vec![],
+        };
+        let context = CommandContext {
+            config,
+            tag: vec![],
+            exclude_tag: vec![],
+            repos: None,
+            parallel: false,
+        };
+
+        let pr_command = PrCommand {
+            title: "Test PR".to_string(),
+            body: "Test body".to_string(),
+            branch_name: None,
+            base_branch: None,
+            commit_msg: None,
+            draft: false,
+            token: "test_token".to_string(),
+            create_only: false,
+        };
+
+        let result = pr_command.execute(&context).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_pr_command_with_filters() {
+        let repository = Repository {
+            name: "test-repo".to_string(),
+            url: "https://github.com/test/repo.git".to_string(),
+            path: Some("./test-repo".to_string()),
+            branch: None,
+            tags: vec!["api".to_string()],
+            config_dir: None,
+        };
+
+        let config = Config {
+            repositories: vec![repository],
+            recipes: vec![],
+        };
+
+        let context = CommandContext {
+            config,
+            tag: vec!["nonexistent".to_string()],
+            exclude_tag: vec![],
+            repos: None,
+            parallel: false,
+        };
+
+        let pr_command = PrCommand {
+            title: "Test PR".to_string(),
+            body: "Test body".to_string(),
+            branch_name: Some("feature/test".to_string()),
+            base_branch: Some("main".to_string()),
+            commit_msg: Some("Test commit".to_string()),
+            draft: true,
+            token: "test_token".to_string(),
+            create_only: true,
+        };
+
+        let result = pr_command.execute(&context).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_pr_command_execution_paths() {
+        let repository = Repository {
+            name: "test-repo".to_string(),
+            url: "https://github.com/test/repo.git".to_string(),
+            path: Some("./nonexistent-path".to_string()),
+            branch: None,
+            tags: vec!["backend".to_string()],
+            config_dir: None,
+        };
+
+        let config = Config {
+            repositories: vec![repository],
+            recipes: vec![],
+        };
+
+        let context = CommandContext {
+            config,
+            tag: vec!["backend".to_string()],
+            exclude_tag: vec![],
+            repos: None,
+            parallel: false,
+        };
+
+        let pr_command = PrCommand {
+            title: "Integration Test PR".to_string(),
+            body: "Integration test body".to_string(),
+            branch_name: None,
+            base_branch: None,
+            commit_msg: None,
+            draft: false,
+            token: "test_token".to_string(),
+            create_only: false,
+        };
+
+        // This will hit the error handling paths since the repo doesn't exist
+        let result = pr_command.execute(&context).await;
+        assert!(result.is_err()); // Expect error due to nonexistent repository
+    }
+
+    #[tokio::test]
+    async fn test_pr_command_parallel_execution() {
+        let repository = Repository {
+            name: "test-repo-parallel".to_string(),
+            url: "https://github.com/test/repo.git".to_string(),
+            path: Some("./nonexistent-parallel".to_string()),
+            branch: None,
+            tags: vec!["test".to_string()],
+            config_dir: None,
+        };
+
+        let config = Config {
+            repositories: vec![repository],
+            recipes: vec![],
+        };
+
+        let context = CommandContext {
+            config,
+            tag: vec!["test".to_string()],
+            exclude_tag: vec![],
+            repos: None,
+            parallel: true, // Test parallel execution path
+        };
+
+        let pr_command = PrCommand {
+            title: "Parallel Test PR".to_string(),
+            body: "Parallel test body".to_string(),
+            branch_name: None,
+            base_branch: None,
+            commit_msg: None,
+            draft: false,
+            token: "test_token".to_string(),
+            create_only: false,
+        };
+
+        // This will hit the parallel execution error handling paths
+        let result = pr_command.execute(&context).await;
+        assert!(result.is_err()); // Expect error due to nonexistent repository
+    }
+
+    #[tokio::test]
+    async fn test_pr_command_module_exists() {
+        // Test to ensure the PR command module is properly accessible
+        let pr_command = PrCommand {
+            title: "Module Test".to_string(),
+            body: "Module test body".to_string(),
+            branch_name: None,
+            base_branch: None,
+            commit_msg: None,
+            draft: false,
+            token: "test_token".to_string(),
+            create_only: false,
+        };
+
+        assert_eq!(pr_command.title, "Module Test");
+        assert!(!pr_command.draft);
+        assert!(!pr_command.create_only);
+    }
+}

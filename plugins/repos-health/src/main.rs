@@ -188,3 +188,109 @@ fn short_timestamp() -> String {
     let now = Utc::now();
     format!("{}", now.format("%Y%m%d"))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    #[test]
+    fn test_print_help() {
+        // Test that print_help function executes without panicking
+        print_help();
+        // If we reach this point, the function executed successfully
+        // Test passes if print_help() completes without panicking
+    }
+
+    #[test]
+    fn test_short_timestamp_format() {
+        let timestamp = short_timestamp();
+        // Should be 8 characters in YYYYMMDD format
+        assert_eq!(timestamp.len(), 8);
+        // Should be all digits
+        assert!(timestamp.chars().all(|c| c.is_ascii_digit()));
+    }
+
+    #[test]
+    fn test_check_outdated_execution() {
+        // Test execution path for check_outdated function
+        let temp_dir = TempDir::new().unwrap();
+        let repo_path = temp_dir.path();
+
+        // This will hit the npm command execution path
+        // Expected to return empty vec since npm likely not available in test environment
+        let result = check_outdated(repo_path);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_update_dependencies_execution() {
+        // Test execution path for update_dependencies function
+        let temp_dir = TempDir::new().unwrap();
+        let repo_path = temp_dir.path();
+
+        // This will execute the npm update command path
+        let result = update_dependencies(repo_path);
+        assert!(result.is_ok()); // Should always succeed (ignores npm failures)
+    }
+
+    #[test]
+    fn test_has_lockfile_changes_execution() {
+        // Test execution path for has_lockfile_changes function
+        let temp_dir = TempDir::new().unwrap();
+        let repo_path = temp_dir.path();
+
+        // Initialize a git repo for the test
+        let _ = Command::new("git")
+            .arg("init")
+            .current_dir(repo_path)
+            .output();
+
+        // This will hit the git status execution path
+        let result = has_lockfile_changes(repo_path);
+        // May succeed or fail depending on git setup, but tests execution path
+        let _ = result; // Don't assert result since git may not be available
+    }
+
+    #[test]
+    fn test_process_repo_no_package_json() {
+        // Test process_repo execution path when no package.json exists
+        let temp_dir = TempDir::new().unwrap();
+
+        let repo = Repository {
+            name: "test-repo".to_string(),
+            url: "https://github.com/test/repo.git".to_string(),
+            path: Some(temp_dir.path().to_string_lossy().to_string()),
+            branch: None,
+            tags: vec![],
+            config_dir: None,
+        };
+
+        // This should hit the "no package.json" error path
+        let result = process_repo(&repo);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("no package.json"));
+    }
+
+    #[test]
+    fn test_run_command_execution() {
+        // Test the run function execution path
+        let temp_dir = TempDir::new().unwrap();
+        let repo_path = temp_dir.path();
+
+        // Test with a simple command that should succeed
+        let result = run(repo_path, ["echo", "test"]);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_run_command_failure() {
+        // Test the run function error path
+        let temp_dir = TempDir::new().unwrap();
+        let repo_path = temp_dir.path();
+
+        // Test with a command that should fail
+        let result = run(repo_path, ["nonexistent_command_12345"]);
+        assert!(result.is_err());
+    }
+}
