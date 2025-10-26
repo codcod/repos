@@ -49,19 +49,8 @@ impl Repository {
 
     /// Validate repository configuration
     pub fn validate(&self) -> Result<()> {
-        if self.name.is_empty() {
-            return Err(anyhow::anyhow!("Repository name cannot be empty"));
-        }
-
-        if self.url.is_empty() {
-            return Err(anyhow::anyhow!("Repository URL cannot be empty"));
-        }
-
-        if !self.is_url_valid() {
-            return Err(anyhow::anyhow!("Invalid repository URL: {}", self.url));
-        }
-
-        Ok(())
+        crate::utils::validators::validate_repository(self)
+            .map_err(|errors| crate::utils::validators::validation_errors_to_anyhow(errors))
     }
 
     /// Get the target directory for cloning

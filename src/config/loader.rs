@@ -1,7 +1,8 @@
 //! Configuration file loading and saving
 
-use super::{ConfigValidator, Repository};
+use super::Repository;
 use crate::utils::filters;
+use crate::utils::validators;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
@@ -35,7 +36,8 @@ impl Config {
         }
 
         // Validate the loaded configuration
-        ConfigValidator::validate_repositories(&config.repositories)?;
+        validators::validate_repositories(&config.repositories)
+            .map_err(validators::validation_errors_to_anyhow)?;
 
         Ok(config)
     }
@@ -144,8 +146,8 @@ impl Config {
 
     /// Validate the entire configuration
     pub fn validate(&self) -> Result<()> {
-        ConfigValidator::validate_repositories(&self.repositories)?;
-        Ok(())
+        validators::validate_repositories(&self.repositories)
+            .map_err(validators::validation_errors_to_anyhow)
     }
 
     /// Create a new empty configuration
