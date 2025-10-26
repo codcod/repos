@@ -1,10 +1,11 @@
-//! Utility functions for repository discovery and file system operations
+//! Repository discovery utilities for detecting and analyzing Git repositories
 
 use crate::config::Repository;
 use anyhow::Result;
 use std::path::Path;
 use walkdir::WalkDir;
 
+/// Find all Git repositories in a directory tree
 pub fn find_git_repositories(start_path: &str) -> Result<Vec<Repository>> {
     let mut repositories = Vec::new();
 
@@ -28,37 +29,8 @@ pub fn find_git_repositories(start_path: &str) -> Result<Vec<Repository>> {
     Ok(repositories)
 }
 
-fn create_repository_from_path(path: &Path) -> Result<Option<Repository>> {
-    let name = path
-        .file_name()
-        .and_then(|n| n.to_str())
-        .map(|s| s.to_string());
-
-    if let Some(name) = name {
-        // Try to get remote URL
-        let url = get_remote_url(path)?;
-
-        if let Some(url) = url {
-            // Try to determine tags based on directory name or other heuristics
-            let tags = detect_tags_from_path(path);
-
-            let repository = Repository {
-                name,
-                url,
-                tags,
-                path: Some(path.to_string_lossy().to_string()),
-                branch: None,
-                config_dir: None, // Will be set when config is loaded
-            };
-
-            return Ok(Some(repository));
-        }
-    }
-
-    Ok(None)
-}
-
-fn get_remote_url(repo_path: &Path) -> Result<Option<String>> {
+/// Get remote URL from a Git repository
+pub fn get_remote_url(repo_path: &Path) -> Result<Option<String>> {
     use std::process::Command;
 
     let output = Command::new("git")
@@ -78,7 +50,8 @@ fn get_remote_url(repo_path: &Path) -> Result<Option<String>> {
     Ok(None)
 }
 
-fn detect_tags_from_path(path: &Path) -> Vec<String> {
+/// Detect tags from repository path based on files and directory names
+pub fn detect_tags_from_path(path: &Path) -> Vec<String> {
     let mut tags = Vec::new();
 
     // Check for common patterns in directory names or files
@@ -119,10 +92,35 @@ fn detect_tags_from_path(path: &Path) -> Vec<String> {
     tags
 }
 
-#[allow(dead_code)]
-pub fn ensure_directory_exists(path: &str) -> Result<()> {
-    std::fs::create_dir_all(path)?;
-    Ok(())
+/// Create a Repository instance from a filesystem path
+pub fn create_repository_from_path(path: &Path) -> Result<Option<Repository>> {
+    let name = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .map(|s| s.to_string());
+
+    if let Some(name) = name {
+        // Try to get remote URL
+        let url = get_remote_url(path)?;
+
+        if let Some(url) = url {
+            // Try to determine tags based on directory name or other heuristics
+            let tags = detect_tags_from_path(path);
+
+            let repository = Repository {
+                name,
+                url,
+                tags,
+                path: Some(path.to_string_lossy().to_string()),
+                branch: None,
+                config_dir: None, // Will be set when config is loaded
+            };
+
+            return Ok(Some(repository));
+        }
+    }
+
+    Ok(None)
 }
 
 #[cfg(test)]
@@ -172,6 +170,138 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn test_detect_tags_from_path_go() {
+        let temp_dir = TempDir::new().unwrap();
+        let repo_path = temp_dir.path().join("go-project");
+        fs::create_dir_all(&repo_path).unwrap();
+        fs::write(repo_path.join("go.mod"), "module test\n\ngo 1.19").unwrap();
+
+        let tags = detect_tags_from_path(&repo_path);
+        assert!(tags.contains(&"go".to_string()));
+    }
+
+    #[test]
+    fn test_detect_tags_from_path_javascript() {
+        let temp_dir = TempDir::new().unwrap();
+        let repo_path = temp_dir.path().join("js-project");
+        fs::create_dir_all(&repo_path).unwrap();
+        fs::write(
+            repo_path.join("package.json"),
+            r#"{"name": "test", "version": "1.0.0"}"#,
+        )
+        .unwrap();
+
+        let tags = detect_tags_from_path(&repo_path);
+        assert!(tags.contains(&"javascript".to_string()));
+        assert!(tags.contains(&"node".to_string()));
+    }
+
+    #[test]
+    fn test_detect_tags_from_path_python() {
+        let temp_dir = TempDir::new().unwrap();
+        let repo_path = temp_dir.path().join("python-project");
+        fs::create_dir_all(&repo_path).unwrap();
+        fs::write(repo_path.join("requirements.txt"), "requests==2.28.1\n").unwrap();
+
+        let tags = detect_tags_from_path(&repo_path);
+        assert!(tags.contains(&"python".to_string()));
+    }
+
+    #[test]
+    fn test_detect_tags_from_path_frontend() {
+        let temp_dir = TempDir::new().unwrap();
+        let repo_path = temp_dir.path().join("frontend-app");
+        fs::create_dir_all(&repo_path).unwrap();
+
+        let tags = detect_tags_from_path(&repo_path);
+        assert!(tags.contains(&"frontend".to_string()));
+    }
+
+    #[test]
+    fn test_detect_tags_from_path_backend() {
+        let temp_dir = TempDir::new().unwrap();
+        let repo_path = temp_dir.path().join("backend-api");
+        fs::create_dir_all(&repo_path).unwrap();
+
+        let tags = detect_tags_from_path(&repo_path);
+        assert!(tags.contains(&"backend".to_string()));
+    }
+
+    #[test]
+    fn test_detect_tags_from_path_multiple() {
+        let temp_dir = TempDir::new().unwrap();
+        let repo_path = temp_dir.path().join("fullstack-frontend");
+        fs::create_dir_all(&repo_path).unwrap();
+
+        // Create multiple language files
+        fs::write(repo_path.join("package.json"), r#"{"name": "test"}"#).unwrap();
+        fs::write(repo_path.join("requirements.txt"), "django").unwrap();
+
+        let tags = detect_tags_from_path(&repo_path);
+        assert!(tags.contains(&"javascript".to_string()));
+        assert!(tags.contains(&"node".to_string()));
+        assert!(tags.contains(&"python".to_string()));
+        assert!(tags.contains(&"frontend".to_string()));
+    }
+
+    #[test]
+    fn test_get_remote_url_with_remote() {
+        let temp_dir = TempDir::new().unwrap();
+        let repo_path = temp_dir.path().join("test-repo");
+        fs::create_dir_all(&repo_path).unwrap();
+
+        create_git_repo(&repo_path, Some("https://github.com/user/test-repo.git")).unwrap();
+
+        let url = get_remote_url(&repo_path).unwrap();
+        assert_eq!(
+            url,
+            Some("https://github.com/user/test-repo.git".to_string())
+        );
+    }
+
+    #[test]
+    fn test_get_remote_url_without_remote() {
+        let temp_dir = TempDir::new().unwrap();
+        let repo_path = temp_dir.path().join("local-repo");
+        fs::create_dir_all(&repo_path).unwrap();
+
+        create_git_repo(&repo_path, None).unwrap();
+
+        let url = get_remote_url(&repo_path).unwrap();
+        assert_eq!(url, None);
+    }
+
+    #[test]
+    fn test_create_repository_from_path_with_remote() {
+        let temp_dir = TempDir::new().unwrap();
+        let repo_path = temp_dir.path().join("test-repo");
+        fs::create_dir_all(&repo_path).unwrap();
+        fs::write(repo_path.join("go.mod"), "module test").unwrap();
+
+        create_git_repo(&repo_path, Some("https://github.com/user/test-repo.git")).unwrap();
+
+        let repo = create_repository_from_path(&repo_path).unwrap();
+        assert!(repo.is_some());
+        let repo = repo.unwrap();
+        assert_eq!(repo.name, "test-repo");
+        assert_eq!(repo.url, "https://github.com/user/test-repo.git");
+        assert!(repo.tags.contains(&"go".to_string()));
+    }
+
+    #[test]
+    fn test_create_repository_from_path_without_remote() {
+        let temp_dir = TempDir::new().unwrap();
+        let repo_path = temp_dir.path().join("local-repo");
+        fs::create_dir_all(&repo_path).unwrap();
+
+        create_git_repo(&repo_path, None).unwrap();
+
+        let repo = create_repository_from_path(&repo_path).unwrap();
+        assert!(repo.is_none());
+    }
+
+    // Tests for find_git_repositories function
     #[test]
     fn test_find_git_repositories_empty_directory() {
         let temp_dir = TempDir::new().unwrap();
@@ -440,44 +570,6 @@ version = "0.1.0"
         let repos = find_git_repositories(temp_dir.path().to_str().unwrap()).unwrap();
         assert_eq!(repos.len(), 1);
         assert_eq!(repos[0].name, "shallow-repo");
-    }
-
-    #[test]
-    fn test_ensure_directory_exists_new_directory() {
-        let temp_dir = TempDir::new().unwrap();
-        let new_dir = temp_dir.path().join("new_directory");
-
-        assert!(!new_dir.exists());
-        ensure_directory_exists(new_dir.to_str().unwrap()).unwrap();
-        assert!(new_dir.exists());
-        assert!(new_dir.is_dir());
-    }
-
-    #[test]
-    fn test_ensure_directory_exists_existing_directory() {
-        let temp_dir = TempDir::new().unwrap();
-        let existing_dir = temp_dir.path().join("existing");
-        fs::create_dir(&existing_dir).unwrap();
-
-        assert!(existing_dir.exists());
-        // Should not error on existing directory
-        ensure_directory_exists(existing_dir.to_str().unwrap()).unwrap();
-        assert!(existing_dir.exists());
-    }
-
-    #[test]
-    fn test_ensure_directory_exists_nested_path() {
-        let temp_dir = TempDir::new().unwrap();
-        let nested_path = temp_dir.path().join("level1").join("level2").join("level3");
-
-        assert!(!nested_path.exists());
-        ensure_directory_exists(nested_path.to_str().unwrap()).unwrap();
-        assert!(nested_path.exists());
-        assert!(nested_path.is_dir());
-
-        // Check intermediate directories were created
-        assert!(temp_dir.path().join("level1").exists());
-        assert!(temp_dir.path().join("level1").join("level2").exists());
     }
 
     #[test]

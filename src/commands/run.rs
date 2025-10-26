@@ -2,6 +2,7 @@
 
 use super::{Command, CommandContext};
 use crate::runner::CommandRunner;
+use crate::utils::sanitizers::{sanitize_for_filename, sanitize_script_name};
 use anyhow::Result;
 use async_trait::async_trait;
 
@@ -60,22 +61,6 @@ impl RunCommand {
         }
     }
 
-    /// Sanitize command string for use in directory names
-    fn sanitize_command_for_filename(command: &str) -> String {
-        command
-            .chars()
-            .map(|c| match c {
-                ' ' => '_',
-                '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|' => '_',
-                c if c.is_alphanumeric() || c == '-' || c == '_' || c == '.' => c,
-                _ => '_',
-            })
-            .collect::<String>()
-            .chars()
-            .take(50) // Limit length to avoid overly long directory names
-            .collect()
-    }
-
     async fn execute_command(&self, context: &CommandContext, command: &str) -> Result<()> {
         let repositories = context.config.filter_repositories(
             &context.tag,
@@ -94,7 +79,7 @@ impl RunCommand {
             // Use local time instead of UTC
             let timestamp = chrono::Local::now().format("%Y%m%d-%H%M%S").to_string();
             // Sanitize command for directory name
-            let command_suffix = Self::sanitize_command_for_filename(command);
+            let command_suffix = sanitize_for_filename(command);
             // Use provided output directory or default to "output"
             let base_dir = self
                 .output_dir
@@ -179,7 +164,7 @@ impl RunCommand {
             // Use local time instead of UTC
             let timestamp = chrono::Local::now().format("%Y%m%d-%H%M%S").to_string();
             // Sanitize recipe name for directory name
-            let recipe_suffix = Self::sanitize_command_for_filename(recipe_name);
+            let recipe_suffix = sanitize_for_filename(recipe_name);
             // Use provided output directory or default to "output"
             let base_dir = self
                 .output_dir
@@ -302,7 +287,7 @@ impl RunCommand {
         let repo_path = Path::new(&target_dir);
 
         // Create script directly in the repository root
-        let script_label = Self::sanitize_script_name(recipe_name);
+        let script_label = sanitize_script_name(recipe_name);
         let script_path = repo_path.join(format!("{}.script", script_label));
 
         // Join all steps with newlines to create the script content
@@ -325,18 +310,6 @@ impl RunCommand {
 
         Ok(script_path)
     }
-
-    fn sanitize_script_name(name: &str) -> String {
-        let mut out = String::with_capacity(name.len());
-        for c in name.chars() {
-            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
-                out.push(c.to_ascii_lowercase());
-            } else {
-                out.push('_');
-            }
-        }
-        out
-    }
 }
 
 #[cfg(test)]
@@ -345,56 +318,41 @@ mod tests {
 
     #[test]
     fn test_sanitize_command_for_filename() {
+        assert_eq!(sanitize_for_filename("echo hello"), "echo_hello");
+        assert_eq!(sanitize_for_filename("ls -la"), "ls_-la");
+        assert_eq!(sanitize_for_filename("cat file.txt"), "cat_file.txt");
         assert_eq!(
-            RunCommand::sanitize_command_for_filename("echo hello"),
-            "echo_hello"
-        );
-        assert_eq!(
-            RunCommand::sanitize_command_for_filename("ls -la"),
-            "ls_-la"
-        );
-        assert_eq!(
-            RunCommand::sanitize_command_for_filename("cat file.txt"),
-            "cat_file.txt"
-        );
-        assert_eq!(
-            RunCommand::sanitize_command_for_filename("cmd/with/slashes"),
+            sanitize_for_filename("cmd/with/slashes"),
             "cmd_with_slashes"
         );
+        assert_eq!(sanitize_for_filename("cmd:with:colons"), "cmd_with_colons");
         assert_eq!(
-            RunCommand::sanitize_command_for_filename("cmd:with:colons"),
-            "cmd_with_colons"
-        );
-        assert_eq!(
-            RunCommand::sanitize_command_for_filename("cmd?with?special*chars"),
+            sanitize_for_filename("cmd?with?special*chars"),
             "cmd_with_special_chars"
         );
 
         // Test length limiting
         let long_command = "a".repeat(60);
-        let sanitized = RunCommand::sanitize_command_for_filename(&long_command);
+        let sanitized = sanitize_for_filename(&long_command);
         assert_eq!(sanitized.len(), 50);
         assert_eq!(sanitized, "a".repeat(50));
     }
 
     #[test]
     fn test_sanitize_script_name() {
-        assert_eq!(RunCommand::sanitize_script_name("TestScript"), "testscript");
-        assert_eq!(RunCommand::sanitize_script_name("my-script"), "my-script");
+        assert_eq!(sanitize_script_name("TestScript"), "testscript");
+        assert_eq!(sanitize_script_name("my-script"), "my-script");
+        assert_eq!(sanitize_script_name("script_name"), "script_name");
         assert_eq!(
-            RunCommand::sanitize_script_name("script_name"),
-            "script_name"
-        );
-        assert_eq!(
-            RunCommand::sanitize_script_name("script@example.com"),
+            sanitize_script_name("script@example.com"),
             "script_example_com"
         );
-        assert_eq!(RunCommand::sanitize_script_name("UPPERCASE"), "uppercase");
+        assert_eq!(sanitize_script_name("UPPERCASE"), "uppercase");
         assert_eq!(
-            RunCommand::sanitize_script_name("script with spaces"),
+            sanitize_script_name("script with spaces"),
             "script_with_spaces"
         );
-        assert_eq!(RunCommand::sanitize_script_name("123-script"), "123-script");
+        assert_eq!(sanitize_script_name("123-script"), "123-script");
     }
 
     #[test]
@@ -431,62 +389,50 @@ mod tests {
     #[test]
     fn test_sanitize_command_edge_cases() {
         // Test empty string
-        assert_eq!(RunCommand::sanitize_command_for_filename(""), "");
+        assert_eq!(sanitize_for_filename(""), "");
 
         // Test string with only special characters
-        assert_eq!(
-            RunCommand::sanitize_command_for_filename("!@#$%^&*()"),
-            "__________"
-        );
+        assert_eq!(sanitize_for_filename("!@#$%^&*()"), "__________");
 
         // Test string with mixed valid and invalid characters
         assert_eq!(
-            RunCommand::sanitize_command_for_filename("test-123_abc.txt!@#"),
+            sanitize_for_filename("test-123_abc.txt!@#"),
             "test-123_abc.txt___"
         );
 
         // Test string exactly at limit (50 chars)
         let exactly_fifty = "a".repeat(50);
-        let sanitized = RunCommand::sanitize_command_for_filename(&exactly_fifty);
+        let sanitized = sanitize_for_filename(&exactly_fifty);
         assert_eq!(sanitized.len(), 50);
         assert_eq!(sanitized, exactly_fifty);
 
         // Test Unicode characters (alphanumeric Unicode chars are preserved)
-        assert_eq!(RunCommand::sanitize_command_for_filename("café"), "café");
-        assert_eq!(
-            RunCommand::sanitize_command_for_filename("测试-test"),
-            "测试-test"
-        );
+        assert_eq!(sanitize_for_filename("café"), "café");
+        assert_eq!(sanitize_for_filename("测试-test"), "测试-test");
     }
 
     #[test]
     fn test_sanitize_script_name_edge_cases() {
         // Test empty string
-        assert_eq!(RunCommand::sanitize_script_name(""), "");
+        assert_eq!(sanitize_script_name(""), "");
 
         // Test string with only special characters
-        assert_eq!(RunCommand::sanitize_script_name("!@#$%^&*()"), "__________");
+        assert_eq!(sanitize_script_name("!@#$%^&*()"), "__________");
 
         // Test string with numbers only
-        assert_eq!(RunCommand::sanitize_script_name("12345"), "12345");
+        assert_eq!(sanitize_script_name("12345"), "12345");
 
         // Test string with mixed case and special chars
         assert_eq!(
-            RunCommand::sanitize_script_name("Test-Script_2023!"),
+            sanitize_script_name("Test-Script_2023!"),
             "test-script_2023_"
         );
 
         // Test consecutive special characters
-        assert_eq!(
-            RunCommand::sanitize_script_name("test!!!script"),
-            "test___script"
-        );
+        assert_eq!(sanitize_script_name("test!!!script"), "test___script");
 
         // Test Unicode characters get converted (only ASCII alphanumeric preserved)
-        assert_eq!(
-            RunCommand::sanitize_script_name("café-script"),
-            "caf_-script"
-        );
+        assert_eq!(sanitize_script_name("café-script"), "caf_-script");
     }
 
     #[test]

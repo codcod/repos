@@ -7,7 +7,7 @@ pub mod git;
 pub mod github;
 pub mod plugins;
 pub mod runner;
-pub mod util;
+pub mod utils;
 
 pub type Result<T> = anyhow::Result<T>;
 

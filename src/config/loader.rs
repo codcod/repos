@@ -1,6 +1,7 @@
 //! Configuration file loading and saving
 
 use super::{ConfigValidator, Repository};
+use crate::utils::filters;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
@@ -78,54 +79,22 @@ impl Config {
 
     /// Filter repositories by specific names
     pub fn filter_by_names(&self, names: &[String]) -> Vec<Repository> {
-        if names.is_empty() {
-            return self.repositories.clone();
-        }
-
-        self.repositories
-            .iter()
-            .filter(|repo| names.contains(&repo.name))
-            .cloned()
-            .collect()
+        filters::filter_by_names(&self.repositories, names)
     }
 
     /// Filter repositories by tag
     pub fn filter_by_tag(&self, tag: Option<&str>) -> Vec<Repository> {
-        match tag {
-            Some(tag) => self
-                .repositories
-                .iter()
-                .filter(|repo| repo.has_tag(tag))
-                .cloned()
-                .collect(),
-            None => self.repositories.clone(),
-        }
+        filters::filter_by_tag(&self.repositories, tag)
     }
 
     /// Filter repositories by multiple tags (OR logic)
     pub fn filter_by_any_tag(&self, tags: &[String]) -> Vec<Repository> {
-        if tags.is_empty() {
-            return self.repositories.clone();
-        }
-
-        self.repositories
-            .iter()
-            .filter(|repo| repo.has_any_tag(tags))
-            .cloned()
-            .collect()
+        filters::filter_by_any_tag(&self.repositories, tags)
     }
 
     /// Filter repositories by multiple tags (AND logic)
     pub fn filter_by_all_tags(&self, tags: &[String]) -> Vec<Repository> {
-        if tags.is_empty() {
-            return self.repositories.clone();
-        }
-
-        self.repositories
-            .iter()
-            .filter(|repo| tags.iter().all(|tag| repo.has_tag(tag)))
-            .cloned()
-            .collect()
+        filters::filter_by_all_tags(&self.repositories, tags)
     }
 
     /// Get repository by name
@@ -209,29 +178,7 @@ impl Config {
         exclude_tags: &[String],
         repos: Option<&[String]>,
     ) -> Vec<Repository> {
-        let base_repos = if let Some(repo_names) = repos {
-            // If specific repos are specified, filter by names first
-            self.filter_by_names(repo_names)
-        } else {
-            // Otherwise start with all repositories
-            self.repositories.clone()
-        };
-
-        // Apply both inclusion and exclusion filters in a single pass
-        base_repos
-            .into_iter()
-            .filter(|repo| {
-                // Check inclusion filter: if include_tags is empty, include all; otherwise check if repo has any included tag
-                let included =
-                    include_tags.is_empty() || include_tags.iter().any(|tag| repo.has_tag(tag));
-
-                // Check exclusion filter: if exclude_tags is empty, exclude none; otherwise check if repo has any excluded tag
-                let excluded =
-                    !exclude_tags.is_empty() && exclude_tags.iter().any(|tag| repo.has_tag(tag));
-
-                included && !excluded
-            })
-            .collect()
+        filters::filter_repositories(&self.repositories, include_tags, exclude_tags, repos)
     }
 }
 
