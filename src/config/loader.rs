@@ -518,4 +518,117 @@ mod tests {
         assert!(removed);
         assert_eq!(config.repositories.len(), 1);
     }
+
+    #[test]
+    fn test_fix_yaml_indentation() {
+        // Test basic array item indentation
+        let yaml = "repositories:\n- name: test\n  url: test.git";
+        let fixed = Config::fix_yaml_indentation(yaml);
+        assert!(fixed.contains("  - name: test"));
+        assert!(fixed.contains("    url: test.git"));
+
+        // Test already correctly indented yaml
+        let yaml = "repositories:\n  - name: test\n    url: test.git";
+        let fixed = Config::fix_yaml_indentation(yaml);
+        assert!(fixed.contains("  - name: test"));
+        assert!(fixed.contains("    url: test.git"));
+
+        // Test lines with different indentation levels
+        let yaml = "key: value\narray:\n- item1\n  subkey: subvalue";
+        let fixed = Config::fix_yaml_indentation(yaml);
+        assert!(fixed.contains("key: value"));
+        assert!(fixed.contains("  - item1"));
+        assert!(fixed.contains("    subkey: subvalue"));
+    }
+
+    #[test]
+    fn test_find_recipe() {
+        let mut config = Config::new();
+        let recipe = Recipe {
+            name: "test-recipe".to_string(),
+            steps: vec!["echo hello".to_string()],
+        };
+        config.recipes.push(recipe);
+
+        let found = config.find_recipe("test-recipe");
+        assert!(found.is_some());
+        assert_eq!(found.unwrap().name, "test-recipe");
+
+        let not_found = config.find_recipe("nonexistent");
+        assert!(not_found.is_none());
+    }
+
+    #[test]
+    fn test_config_new_default() {
+        let config1 = Config::new();
+        let config2 = Config::default();
+
+        assert_eq!(config1.repositories.len(), config2.repositories.len());
+        assert_eq!(config1.recipes.len(), config2.recipes.len());
+        assert!(config1.repositories.is_empty());
+        assert!(config1.recipes.is_empty());
+    }
+
+    #[test]
+    fn test_config_validate_empty() {
+        let config = Config::new();
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn test_load_config_alias() {
+        // Test that load_config is an alias for load
+        // We can't test actual file loading without creating temp files,
+        // but we can test that the method exists and has the same signature
+        let result1 = Config::load("nonexistent.yaml");
+        let result2 = Config::load_config("nonexistent.yaml");
+
+        // Both should fail in the same way (file not found)
+        assert!(result1.is_err());
+        assert!(result2.is_err());
+        // The error types should be similar (both IO errors for missing file)
+        assert_eq!(
+            result1.unwrap_err().to_string().contains("No such file"),
+            result2.unwrap_err().to_string().contains("No such file")
+        );
+    }
+
+    #[test]
+    fn test_filter_repositories_by_tag_alias() {
+        let config = create_test_config();
+
+        let result1 = config.filter_by_tag(Some("frontend"));
+        let result2 = config.filter_repositories_by_tag(Some("frontend"));
+
+        assert_eq!(result1.len(), result2.len());
+        assert_eq!(result1[0].name, result2[0].name);
+    }
+
+    #[test]
+    fn test_filter_repositories_exclude_tags() {
+        let config = create_test_config();
+
+        // Test excluding tags
+        let filtered = config.filter_repositories(
+            &[],                       // no include filter
+            &["frontend".to_string()], // exclude frontend
+            None,
+        );
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].name, "repo2"); // Only repo2 should remain
+
+        // Test excluding all repos
+        let filtered =
+            config.filter_repositories(&[], &["frontend".to_string(), "backend".to_string()], None);
+        assert_eq!(filtered.len(), 0);
+
+        // Test include and exclude together
+        let filtered = config.filter_repositories(
+            &["web".to_string(), "api".to_string()], // include web OR api
+            &["frontend".to_string()],               // but exclude frontend
+            None,
+        );
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].name, "repo2"); // repo2 has api but not frontend
+    }
 }

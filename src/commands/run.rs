@@ -15,6 +15,7 @@ pub enum RunType {
 }
 
 /// Run command for executing commands or recipes in repositories
+#[derive(Debug)]
 pub struct RunCommand {
     pub run_type: RunType,
     pub no_save: bool,
@@ -335,5 +336,180 @@ impl RunCommand {
             }
         }
         out
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_sanitize_command_for_filename() {
+        assert_eq!(
+            RunCommand::sanitize_command_for_filename("echo hello"),
+            "echo_hello"
+        );
+        assert_eq!(
+            RunCommand::sanitize_command_for_filename("ls -la"),
+            "ls_-la"
+        );
+        assert_eq!(
+            RunCommand::sanitize_command_for_filename("cat file.txt"),
+            "cat_file.txt"
+        );
+        assert_eq!(
+            RunCommand::sanitize_command_for_filename("cmd/with/slashes"),
+            "cmd_with_slashes"
+        );
+        assert_eq!(
+            RunCommand::sanitize_command_for_filename("cmd:with:colons"),
+            "cmd_with_colons"
+        );
+        assert_eq!(
+            RunCommand::sanitize_command_for_filename("cmd?with?special*chars"),
+            "cmd_with_special_chars"
+        );
+
+        // Test length limiting
+        let long_command = "a".repeat(60);
+        let sanitized = RunCommand::sanitize_command_for_filename(&long_command);
+        assert_eq!(sanitized.len(), 50);
+        assert_eq!(sanitized, "a".repeat(50));
+    }
+
+    #[test]
+    fn test_sanitize_script_name() {
+        assert_eq!(RunCommand::sanitize_script_name("TestScript"), "testscript");
+        assert_eq!(RunCommand::sanitize_script_name("my-script"), "my-script");
+        assert_eq!(
+            RunCommand::sanitize_script_name("script_name"),
+            "script_name"
+        );
+        assert_eq!(
+            RunCommand::sanitize_script_name("script@example.com"),
+            "script_example_com"
+        );
+        assert_eq!(RunCommand::sanitize_script_name("UPPERCASE"), "uppercase");
+        assert_eq!(
+            RunCommand::sanitize_script_name("script with spaces"),
+            "script_with_spaces"
+        );
+        assert_eq!(RunCommand::sanitize_script_name("123-script"), "123-script");
+    }
+
+    #[test]
+    fn test_run_command_constructors() {
+        // Test new_command constructor
+        let cmd =
+            RunCommand::new_command("echo test".to_string(), false, Some(PathBuf::from("/tmp")));
+        match cmd.run_type {
+            RunType::Command(ref command) => assert_eq!(command, "echo test"),
+            _ => panic!("Expected Command type"),
+        }
+        assert!(!cmd.no_save);
+        assert_eq!(cmd.output_dir, Some(PathBuf::from("/tmp")));
+
+        // Test new_recipe constructor
+        let cmd = RunCommand::new_recipe("test-recipe".to_string(), true, None);
+        match cmd.run_type {
+            RunType::Recipe(ref recipe) => assert_eq!(recipe, "test-recipe"),
+            _ => panic!("Expected Recipe type"),
+        }
+        assert!(cmd.no_save);
+        assert_eq!(cmd.output_dir, None);
+
+        // Test new_for_test constructor
+        let cmd = RunCommand::new_for_test("test command".to_string(), "/test/output".to_string());
+        match cmd.run_type {
+            RunType::Command(ref command) => assert_eq!(command, "test command"),
+            _ => panic!("Expected Command type"),
+        }
+        assert!(!cmd.no_save);
+        assert_eq!(cmd.output_dir, Some(PathBuf::from("/test/output")));
+    }
+
+    #[test]
+    fn test_sanitize_command_edge_cases() {
+        // Test empty string
+        assert_eq!(RunCommand::sanitize_command_for_filename(""), "");
+
+        // Test string with only special characters
+        assert_eq!(
+            RunCommand::sanitize_command_for_filename("!@#$%^&*()"),
+            "__________"
+        );
+
+        // Test string with mixed valid and invalid characters
+        assert_eq!(
+            RunCommand::sanitize_command_for_filename("test-123_abc.txt!@#"),
+            "test-123_abc.txt___"
+        );
+
+        // Test string exactly at limit (50 chars)
+        let exactly_fifty = "a".repeat(50);
+        let sanitized = RunCommand::sanitize_command_for_filename(&exactly_fifty);
+        assert_eq!(sanitized.len(), 50);
+        assert_eq!(sanitized, exactly_fifty);
+
+        // Test Unicode characters (alphanumeric Unicode chars are preserved)
+        assert_eq!(RunCommand::sanitize_command_for_filename("café"), "café");
+        assert_eq!(
+            RunCommand::sanitize_command_for_filename("测试-test"),
+            "测试-test"
+        );
+    }
+
+    #[test]
+    fn test_sanitize_script_name_edge_cases() {
+        // Test empty string
+        assert_eq!(RunCommand::sanitize_script_name(""), "");
+
+        // Test string with only special characters
+        assert_eq!(RunCommand::sanitize_script_name("!@#$%^&*()"), "__________");
+
+        // Test string with numbers only
+        assert_eq!(RunCommand::sanitize_script_name("12345"), "12345");
+
+        // Test string with mixed case and special chars
+        assert_eq!(
+            RunCommand::sanitize_script_name("Test-Script_2023!"),
+            "test-script_2023_"
+        );
+
+        // Test consecutive special characters
+        assert_eq!(
+            RunCommand::sanitize_script_name("test!!!script"),
+            "test___script"
+        );
+
+        // Test Unicode characters get converted (only ASCII alphanumeric preserved)
+        assert_eq!(
+            RunCommand::sanitize_script_name("café-script"),
+            "caf_-script"
+        );
+    }
+
+    #[test]
+    fn test_run_type_debug() {
+        // Test Debug implementation for RunType enum
+        let cmd_type = RunType::Command("echo test".to_string());
+        let debug_str = format!("{:?}", cmd_type);
+        assert!(debug_str.contains("Command"));
+        assert!(debug_str.contains("echo test"));
+
+        let recipe_type = RunType::Recipe("test-recipe".to_string());
+        let debug_str = format!("{:?}", recipe_type);
+        assert!(debug_str.contains("Recipe"));
+        assert!(debug_str.contains("test-recipe"));
+    }
+
+    #[test]
+    fn test_run_command_debug() {
+        // Test Debug implementation for RunCommand struct
+        let cmd = RunCommand::new_command("echo test".to_string(), true, None);
+        let debug_str = format!("{:?}", cmd);
+        assert!(debug_str.contains("RunCommand"));
+        assert!(debug_str.contains("no_save: true"));
+        assert!(debug_str.contains("output_dir: None"));
     }
 }

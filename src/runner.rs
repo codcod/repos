@@ -701,4 +701,40 @@ mod tests {
                 .contains("Repository directory does not exist")
         );
     }
+
+    #[test]
+    fn test_get_exit_code_description() {
+        assert_eq!(CommandRunner::get_exit_code_description(0), "success");
+        assert_eq!(CommandRunner::get_exit_code_description(1), "general error");
+        assert_eq!(
+            CommandRunner::get_exit_code_description(2),
+            "misuse of shell builtins"
+        );
+        assert_eq!(
+            CommandRunner::get_exit_code_description(126),
+            "command invoked cannot execute"
+        );
+        assert_eq!(
+            CommandRunner::get_exit_code_description(127),
+            "command not found"
+        );
+        assert_eq!(
+            CommandRunner::get_exit_code_description(128),
+            "invalid argument to exit"
+        );
+        assert_eq!(
+            CommandRunner::get_exit_code_description(130),
+            "script terminated by Control-C"
+        );
+        assert_eq!(
+            CommandRunner::get_exit_code_description(131),
+            "terminated by signal"
+        );
+        assert_eq!(
+            CommandRunner::get_exit_code_description(255),
+            "terminated by signal"
+        );
+        assert_eq!(CommandRunner::get_exit_code_description(42), "error");
+        assert_eq!(CommandRunner::get_exit_code_description(-1), "error");
+    }
 }
