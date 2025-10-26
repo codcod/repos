@@ -2,6 +2,7 @@
 
 use crate::config::Repository;
 use crate::git::Logger;
+use crate::utils::get_exit_code_description;
 use anyhow::Result;
 use serde_json;
 
@@ -23,21 +24,6 @@ pub struct CommandRunner {
 impl CommandRunner {
     pub fn new() -> Self {
         Self::default()
-    }
-
-    /// Get a human-readable description of an exit code
-    fn get_exit_code_description(exit_code: i32) -> &'static str {
-        match exit_code {
-            0 => "success",
-            1 => "general error",
-            2 => "misuse of shell builtins",
-            126 => "command invoked cannot execute",
-            127 => "command not found",
-            128 => "invalid argument to exit",
-            130 => "script terminated by Control-C",
-            _ if exit_code > 128 => "terminated by signal",
-            _ => "error",
-        }
     }
 
     /// Run command and capture output for the new logging system
@@ -156,7 +142,7 @@ impl CommandRunner {
             std::fs::create_dir_all(&repo_log_dir)?;
 
             // Always write metadata file with command and exit code in JSON format
-            let exit_code_description = Self::get_exit_code_description(exit_code);
+            let exit_code_description = get_exit_code_description(exit_code);
             let metadata_content = if let Some(ref recipe_ctx) = recipe_context {
                 serde_json::json!({
                     "recipe": recipe_ctx.name,
@@ -191,7 +177,7 @@ impl CommandRunner {
         }
 
         // Log completion with exit code and description
-        let exit_code_description = Self::get_exit_code_description(exit_code);
+        let exit_code_description = get_exit_code_description(exit_code);
         if let Some(ref recipe_ctx) = recipe_context {
             self.logger.info(
                 repo,
@@ -238,7 +224,7 @@ impl CommandRunner {
             .status()?;
 
         let exit_code = status.code().unwrap_or(-1);
-        let exit_code_description = Self::get_exit_code_description(exit_code);
+        let exit_code_description = get_exit_code_description(exit_code);
 
         self.logger.info(
             repo,

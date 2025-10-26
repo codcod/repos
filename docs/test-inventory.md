@@ -559,62 +559,64 @@ Classification criteria:
 
 | Case | Type | Rationale | Status |
 |------|------|-----------|---------|
-|1.1 Load valid config| Integration | Parses real file from disk and produces model used by other commands| Automated |
-|1.2 Missing config file| Integration | Depends on filesystem error handling| Automated |
-|1.3 Malformed YAML| Unit | Focus on parse failure surfaced by loader logic| Gap |
-|1.4 Path forms (abs/rel)| Unit | Pure path resolution logic; can be isolated| Automated |
-|1.5 Empty repositories list| Unit | Behavior is early-return logic| Automated |
-|1.6 Empty recipes list| Unit | Lookup logic and conditional absence handling| Gap |
-|1.7 Resolve recipe names uniquely| Unit | Name lookup & matching only| Automated |
+|1.1 Load valid config| Integration | Parses real file from disk and produces model used by other commands| ✅ Automated |
+|1.2 Missing config file| Integration | Depends on filesystem error handling| ✅ Automated |
+|1.3 Malformed YAML| Unit | Focus on parse failure surfaced by loader logic| ⚠️ Partial - need structured tests |
+|1.4 Path forms (abs/rel)| Unit | Pure path resolution logic; can be isolated| ✅ Automated |
+|1.5 Empty repositories list| Unit | Behavior is early-return logic| ✅ Automated |
+|1.6 Empty recipes list| Unit | Lookup logic and conditional absence handling| ⚠️ Partial - needs dedicated tests |
+|1.7 Resolve recipe names uniquely| Unit | Name lookup & matching only| ✅ Automated |
+|Symlink repository path resolution| Integration | FS symlink target resolution & safety| ❌ Gap |
 
 ### 18.2 Repository Management
 
 | Case | Type | Rationale | Status |
 |------|------|-----------|---------|
-|2.1 Clone single repository| Integration | Invokes `git clone` and filesystem| Automated |
-|2.2 Clone multiple sequential| Integration | Iterative multi repo interaction| Automated |
-|2.3 Clone multiple parallel| Integration | Concurrency + multiple git operations| Automated |
-|2.4 Skip cloning if directory exists| Integration | Relies on FS presence checks| Automated |
-|2.5 Invalid repo URL| Integration | Captures external command failure| Automated |
-|2.6 Branch override| Integration | Uses git branch checkout| Gap |
-|2.7 Tag filtering include-only| Unit | Pure filtering logic| Automated |
-|2.8 Tag exclusion| Unit | Pure filtering logic| Automated |
-|2.9 Explicit repos override| Unit | Selection precedence logic| Automated |
-|2.10 Mixed include/exclude| Unit | Logical combination test| Automated |
+|2.1 Clone single repository| Integration | Invokes `git clone` and filesystem| ✅ Automated |
+|2.2 Clone multiple sequential| Integration | Iterative multi repo interaction| ✅ Automated |
+|2.3 Clone multiple parallel| Integration | Concurrency + multiple git operations| ✅ Automated |
+|2.4 Skip cloning if directory exists| Integration | Relies on FS presence checks| ✅ Automated |
+|2.5 Invalid repo URL| Integration | Captures external command failure| ✅ Automated |
+|2.6 Branch override| Integration | Uses git branch checkout| ❌ Gap - needs implementation |
+|2.7 Tag filtering include-only| Unit | Pure filtering logic| ✅ Automated |
+|2.8 Tag exclusion| Unit | Pure filtering logic| ✅ Automated |
+|2.9 Explicit repos override| Unit | Selection precedence logic| ✅ Automated |
+|2.10 Mixed include/exclude| Unit | Logical combination test| ✅ Automated |
 
 ### 18.3 Run Command (Command Mode)
 
 | Case | Type | Rationale | Status |
 |------|------|-----------|---------|
-|3.1 Single echo| Integration | Executes shell in repo context| Automated |
-|3.2 Multiple sequential| Integration | Iterative multi-repo execution| Automated |
-|3.3 Multiple parallel| Integration | Concurrency execution path| Automated |
-|3.4 Long command name sanitization| Unit | String transformation only| Automated |
-|3.5 Special characters command| Integration | Actual shell invocation & metadata capture| Automated |
-|3.6 Empty command string| Unit | Validation logic (candidate for stricter behavior) | Partial |
-|3.7 No-save mode behavior| Integration | Affects artifact creation side-effects| Automated |
-|3.8 Save mode directory creation| Integration | Filesystem structure| Automated |
-|3.9 Existing output directory reuse| Integration | FS existence + new path logic| Automated |
-|3.10 Exit code recording| Unit | Mapping + extraction (can isolate via fake status) | Automated |
-|3.11 Exit code description mapping| Unit | Pure match function| Partial |
-|3.12 Metadata.json structure (command)| Integration | Requires file writing & JSON content| Automated |
+|3.1 Single echo| Integration | Executes shell in repo context| ✅ Automated |
+|3.2 Multiple sequential| Integration | Iterative multi-repo execution| ✅ Automated |
+|3.3 Multiple parallel| Integration | Concurrency execution path| ✅ Automated |
+|3.4 Long command name sanitization| Unit | String transformation only| ✅ Automated |
+|3.5 Special characters command| Integration | Actual shell invocation & metadata capture| ✅ Automated |
+|3.6 Empty command string| Unit | Validation logic (candidate for stricter behavior) | ⚠️ Partial - behavior unclear |
+|3.7 No-save mode behavior| Integration | Affects artifact creation side-effects| ✅ Automated |
+|3.8 Save mode directory creation| Integration | Filesystem structure| ✅ Automated |
+|3.9 Existing output directory reuse| Integration | FS existence + new path logic| ✅ Automated |
+|3.10 Exit code recording| Unit | Mapping + extraction (can isolate via fake status) | ✅ Automated |
+|3.11 Exit code description mapping| Unit | Pure match function| ✅ Automated (added unit tests) |
+|3.12 Metadata.json structure (command)| Integration | Requires file writing & JSON content| ✅ Automated |
 
 ### 18.4 Run Command (Recipe Mode)
 
 | Case | Type | Rationale | Status |
 |------|------|-----------|---------|
-|4.1 Single-step recipe| Integration | Script materialization + execution| Automated |
-|4.2 Multi-step sequential| Integration | Aggregate execution order| Automated |
-|4.3 Multi-repo parallel recipe| Integration | Concurrency + FS per repo| Automated |
-|4.4 Script created & removed| Integration | FS artifact lifecycle| Automated |
-|4.5 Metadata.json recipe fields| Integration | Generated file content| Automated |
-|4.6 Recipe name not found| Unit | Lookup error path| Automated |
-|4.7 Zero steps recipe| Unit | Validation / precondition logic| Automated |
-|4.8 Implicit shebang| Unit | Script content transformation| Automated |
-|4.9 Permissions set| Integration | Actual FS permissions required| Automated |
-|4.10 Cleanup on failure| Integration | Execution + post-failure cleanup| Automated |
-|4.11 Exit codes propagate| Integration | Real failing script status| Automated |
-|4.12 Mixed success/failure halts| Integration | Execution control flow| Partial |
+|4.1 Single-step recipe| Integration | Script materialization + execution| ✅ Automated |
+|4.2 Multi-step sequential| Integration | Aggregate execution order| ✅ Automated |
+|4.3 Multi-repo parallel recipe| Integration | Concurrency + FS per repo| ✅ Automated |
+|4.4 Script created & removed| Integration | FS artifact lifecycle| ✅ Automated |
+|4.5 Metadata.json recipe fields| Integration | Generated file content| ✅ Automated |
+|4.6 Recipe name not found| Unit | Lookup error path| ✅ Automated |
+|4.7 Zero steps recipe| Unit | Validation / precondition logic| ✅ Automated |
+|4.8 Implicit shebang| Unit | Script content transformation| ✅ Automated |
+|4.9 Permissions set| Integration | Actual FS permissions required| ✅ Automated |
+|4.10 Cleanup on failure| Integration | Execution + post-failure cleanup| ✅ Automated |
+|4.11 Exit codes propagate| Integration | Real failing script status| ✅ Automated |
+|4.12 Mixed success/failure halts| Integration | Execution control flow| ⚠️ Partial - needs verification |
+|Unicode script name sanitization| Unit | Ensures generated script filename handles Unicode safely| ❌ Gap |
 
 ### 18.5 Logging & Output
 
@@ -626,6 +628,7 @@ Classification criteria:
 |5.4 Timestamp format| Unit | Formatting function| Gap |
 |5.5 Directory naming pattern| Unit | String assembly + sanitization| Partial |
 |5.6 Truncation behavior| Unit | String length logic| Automated |
+|Simultaneous runs distinct timestamps| Integration | Parallel invocations produce non-colliding directories| ❌ Gap |
 
 ### 18.6 Parallel vs Sequential Behavior
 
@@ -645,13 +648,13 @@ All considered Integration (multi-repo orchestration). Stress/performance varian
 
 | Case | Type | Rationale | Status |
 |------|------|-----------|---------|
-|8.1 Missing command & recipe| E2E | Full CLI argument validation path| Automated |
-|8.2 Nonexistent binary (plugin)| Integration | External process failure under plugin harness| Partial |
-|8.3 Mutual exclusivity metadata| Integration | Generated file schema| Automated |
-|8.4 Command not found 127| Integration | Real process exit| Automated |
-|8.5 Script cannot execute 126| Integration | Permission/exec failure| Gap |
-|8.6 Interrupted 130| Integration | Signal handling from process| Gap |
-|Signal >128 mapping (edge)| Unit | Mapping function correctness| Gap |
+|8.1 Missing command & recipe| E2E | Full CLI argument validation path| ✅ Automated (recently fixed) |
+|8.2 Nonexistent binary (plugin)| Integration | External process failure under plugin harness| ⚠️ Partial |
+|8.3 Mutual exclusivity metadata| Integration | Generated file schema| ✅ Automated |
+|8.4 Command not found 127| Integration | Real process exit| ✅ Automated |
+|8.5 Script cannot execute 126| Integration | Permission/exec failure| ❌ Gap |
+|8.6 Interrupted 130| Integration | Signal handling from process| ❌ Gap |
+|Signal >128 mapping (edge)| Unit | Mapping function correctness| ❌ Gap |
 
 ### 18.9 Plugins
 
@@ -663,6 +666,7 @@ All considered Integration (multi-repo orchestration). Stress/performance varian
 |9.4 Fallback when no plugins present| Integration | Graceful empty state | Automated |
 |9.5 Help text still accessible with plugins| E2E | Full CLI parsing with dynamic plugin context | Gap |
 |9.6 Plugin does not interfere with core logging| Integration | Compare logs with/without plugins | Partial |
+|Multiple plugins simultaneously| Integration | Validates isolation & non-interference with more than one plugin | ❌ Gap |
 
 ### 18.10 Pull Requests
 

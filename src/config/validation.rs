@@ -1,64 +1,39 @@
 //! Configuration validation utilities
+//!
+//! This module provides backward compatibility wrappers for the centralized
+//! validation logic in utils::validators.
 
 use super::Repository;
+use crate::utils::validators;
 use anyhow::Result;
 
 /// Configuration validator
+///
+/// This struct provides backward compatibility with existing validation patterns
+/// while delegating to the centralized utils::validators module.
 pub struct ConfigValidator;
 
 impl ConfigValidator {
     /// Validate a single repository configuration
     pub fn validate_repository(repo: &Repository) -> Result<()> {
-        repo.validate()
+        validators::validate_repository(repo)
+            .map_err(|errors| validators::validation_errors_to_anyhow(errors))
     }
 
     /// Validate multiple repositories
     pub fn validate_repositories(repos: &[Repository]) -> Result<()> {
-        let mut errors = Vec::new();
-
-        // Check for duplicate names
-        let mut names = std::collections::HashSet::new();
-        for repo in repos {
-            if !names.insert(&repo.name) {
-                errors.push(format!("Duplicate repository name: {}", repo.name));
-            }
-        }
-
-        // Validate each repository
-        for repo in repos {
-            if let Err(e) = repo.validate() {
-                errors.push(format!("Repository '{}': {}", repo.name, e));
-            }
-        }
-
-        if !errors.is_empty() {
-            return Err(anyhow::anyhow!("Validation errors: {}", errors.join("; ")));
-        }
-
-        Ok(())
+        validators::validate_repositories(repos)
+            .map_err(|errors| validators::validation_errors_to_anyhow(errors))
     }
 
     /// Validate tag filters
     pub fn validate_tag_filter(filter: &str) -> Result<()> {
-        if filter.trim().is_empty() {
-            return Err(anyhow::anyhow!("Tag filter cannot be empty: {}", filter));
-        }
-
-        // Additional tag filter validation can be added here
-        // For example, check for invalid characters, length limits, etc.
-
-        Ok(())
+        validators::validate_tag_filter(filter).map_err(|error| anyhow::anyhow!("{}", error))
     }
 
     /// Check if all repositories with the given tag exist
     pub fn validate_tag_exists(repos: &[Repository], tag: &str) -> Result<()> {
-        let has_tag = repos.iter().any(|repo| repo.has_tag(tag));
-
-        if !has_tag {
-            return Err(anyhow::anyhow!("No repositories found with tag: {}", tag));
-        }
-
-        Ok(())
+        validators::validate_tag_exists(repos, tag).map_err(|error| anyhow::anyhow!("{}", error))
     }
 }
 
@@ -79,7 +54,7 @@ mod tests {
             ),
         ];
 
-        assert!(ConfigValidator::validate_repositories(&repos).is_ok());
+        assert!(validators::validate_repositories(&repos).is_ok());
     }
 
     #[test]
@@ -95,14 +70,14 @@ mod tests {
             ),
         ];
 
-        assert!(ConfigValidator::validate_repositories(&repos).is_err());
+        assert!(validators::validate_repositories(&repos).is_err());
     }
 
     #[test]
     fn test_tag_filter_validation() {
-        assert!(ConfigValidator::validate_tag_filter("frontend").is_ok());
-        assert!(ConfigValidator::validate_tag_filter("").is_err());
-        assert!(ConfigValidator::validate_tag_filter("   ").is_err());
+        assert!(validators::validate_tag_filter("frontend").is_ok());
+        assert!(validators::validate_tag_filter("").is_err());
+        assert!(validators::validate_tag_filter("   ").is_err());
     }
 
     #[test]
@@ -115,7 +90,7 @@ mod tests {
 
         let repos = vec![repo1];
 
-        assert!(ConfigValidator::validate_tag_exists(&repos, "frontend").is_ok());
-        assert!(ConfigValidator::validate_tag_exists(&repos, "backend").is_err());
+        assert!(validators::validate_tag_exists(&repos, "frontend").is_ok());
+        assert!(validators::validate_tag_exists(&repos, "backend").is_err());
     }
 }

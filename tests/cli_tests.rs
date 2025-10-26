@@ -1,6 +1,60 @@
 //! CLI argument parsing integration tests
 
+use std::env;
+use std::path::PathBuf;
 use std::process::Command;
+use tempfile::TempDir;
+
+/// Helper struct for creating temporary test workspaces
+struct Workspace {
+    #[allow(dead_code)]
+    root: TempDir,
+    config_path: PathBuf,
+}
+
+impl Workspace {
+    fn new() -> Self {
+        let root = TempDir::new().expect("Failed to create temp dir");
+        let config_path = root.path().join("config.yaml");
+
+        Self { root, config_path }
+    }
+
+    fn write_config(&self, content: &str) {
+        std::fs::write(&self.config_path, content).expect("Failed to write config");
+    }
+
+    fn config_str(&self) -> &str {
+        self.config_path.to_str().expect("Invalid config path")
+    }
+}
+
+/// Result of running a CLI command
+#[derive(Debug)]
+struct CliOutput {
+    status: i32,
+    stdout: String,
+    stderr: String,
+}
+
+/// Run the repos CLI with given arguments
+fn run_cli(args: &[&str]) -> CliOutput {
+    let mut cmd = Command::new("cargo");
+    cmd.args(["run", "--quiet", "--"]);
+    cmd.args(args);
+
+    // Always run cargo from the project root
+    let project_root = env::current_dir().expect("Failed to get current directory");
+    cmd.current_dir(&project_root);
+
+    let output = cmd.output().expect("Failed to execute cargo run");
+
+    CliOutput {
+        status: output.status.code().unwrap_or(-1),
+        stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
+        stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
+    }
+}
 
 #[test]
 fn test_cli_missing_subcommand() {
@@ -40,6 +94,62 @@ fn test_clone_command_missing_config() {
 }
 
 #[test]
+fn test_run_command_missing_command_and_recipe() {
+    let ws = Workspace::new();
+    ws.write_config(
+        r#"
+repositories:
+  - name: test-repo
+    url: https://github.com/test/repo
+    tags: [test]
+"#,
+    );
+
+    let output = run_cli(&["run", "--config", ws.config_str()]);
+
+    assert_ne!(output.status, 0);
+    assert!(
+        output
+            .stderr
+            .contains("Either --recipe or a command must be provided")
+    );
+}
+
+#[test]
+fn test_run_command_both_command_and_recipe() {
+    let ws = Workspace::new();
+    ws.write_config(
+        r#"
+repositories:
+  - name: test-repo
+    url: https://github.com/test/repo
+    tags: [test]
+recipes:
+  - name: test-recipe
+    steps:
+      - echo "test recipe"
+"#,
+    );
+
+    let output = run_cli(&[
+        "run",
+        "--config",
+        ws.config_str(),
+        "--recipe",
+        "test-recipe",
+        "echo",
+        "test",
+    ]);
+
+    assert_ne!(output.status, 0);
+    assert!(
+        output
+            .stderr
+            .contains("Cannot specify both command and --recipe")
+    );
+}
+
+#[test]
 fn test_pr_command_missing_required_args() {
     let output = Command::new("cargo")
         .args(["run", "--", "pr"])
@@ -75,33 +185,19 @@ fn test_remove_command_with_invalid_config() {
 
 #[test]
 fn test_clone_with_invalid_tag() {
-    // Create a temporary valid config file
-    let config_content = r#"
+    let ws = Workspace::new();
+    ws.write_config(
+        r#"
 repositories:
   - name: test-repo
     url: https://github.com/test/repo
     tags: [backend]
-"#;
-    std::fs::write("test_config.yaml", config_content).expect("Failed to write test config");
+"#,
+    );
 
-    let output = Command::new("cargo")
-        .args([
-            "run",
-            "--",
-            "clone",
-            "--config",
-            "test_config.yaml",
-            "--tag",
-            "nonexistent",
-        ])
-        .output()
-        .expect("Failed to execute cargo run");
-
-    // Clean up
-    std::fs::remove_file("test_config.yaml").ok();
+    let output = run_cli(&["clone", "--config", ws.config_str(), "--tag", "nonexistent"]);
 
     // Should succeed but clone nothing
-    assert!(output.status.success());
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("No repositories") || stdout.is_empty());
+    assert_eq!(output.status, 0);
+    assert!(output.stdout.contains("No repositories") || output.stdout.is_empty());
 }

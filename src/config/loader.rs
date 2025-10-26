@@ -1,6 +1,8 @@
 //! Configuration file loading and saving
 
-use super::{ConfigValidator, Repository};
+use super::Repository;
+use crate::utils::filters;
+use crate::utils::validators;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
@@ -34,7 +36,8 @@ impl Config {
         }
 
         // Validate the loaded configuration
-        ConfigValidator::validate_repositories(&config.repositories)?;
+        validators::validate_repositories(&config.repositories)
+            .map_err(validators::validation_errors_to_anyhow)?;
 
         Ok(config)
     }
@@ -78,54 +81,22 @@ impl Config {
 
     /// Filter repositories by specific names
     pub fn filter_by_names(&self, names: &[String]) -> Vec<Repository> {
-        if names.is_empty() {
-            return self.repositories.clone();
-        }
-
-        self.repositories
-            .iter()
-            .filter(|repo| names.contains(&repo.name))
-            .cloned()
-            .collect()
+        filters::filter_by_names(&self.repositories, names)
     }
 
     /// Filter repositories by tag
     pub fn filter_by_tag(&self, tag: Option<&str>) -> Vec<Repository> {
-        match tag {
-            Some(tag) => self
-                .repositories
-                .iter()
-                .filter(|repo| repo.has_tag(tag))
-                .cloned()
-                .collect(),
-            None => self.repositories.clone(),
-        }
+        filters::filter_by_tag(&self.repositories, tag)
     }
 
     /// Filter repositories by multiple tags (OR logic)
     pub fn filter_by_any_tag(&self, tags: &[String]) -> Vec<Repository> {
-        if tags.is_empty() {
-            return self.repositories.clone();
-        }
-
-        self.repositories
-            .iter()
-            .filter(|repo| repo.has_any_tag(tags))
-            .cloned()
-            .collect()
+        filters::filter_by_any_tag(&self.repositories, tags)
     }
 
     /// Filter repositories by multiple tags (AND logic)
     pub fn filter_by_all_tags(&self, tags: &[String]) -> Vec<Repository> {
-        if tags.is_empty() {
-            return self.repositories.clone();
-        }
-
-        self.repositories
-            .iter()
-            .filter(|repo| tags.iter().all(|tag| repo.has_tag(tag)))
-            .cloned()
-            .collect()
+        filters::filter_by_all_tags(&self.repositories, tags)
     }
 
     /// Get repository by name
@@ -175,8 +146,8 @@ impl Config {
 
     /// Validate the entire configuration
     pub fn validate(&self) -> Result<()> {
-        ConfigValidator::validate_repositories(&self.repositories)?;
-        Ok(())
+        validators::validate_repositories(&self.repositories)
+            .map_err(validators::validation_errors_to_anyhow)
     }
 
     /// Create a new empty configuration
@@ -209,29 +180,7 @@ impl Config {
         exclude_tags: &[String],
         repos: Option<&[String]>,
     ) -> Vec<Repository> {
-        let base_repos = if let Some(repo_names) = repos {
-            // If specific repos are specified, filter by names first
-            self.filter_by_names(repo_names)
-        } else {
-            // Otherwise start with all repositories
-            self.repositories.clone()
-        };
-
-        // Apply both inclusion and exclusion filters in a single pass
-        base_repos
-            .into_iter()
-            .filter(|repo| {
-                // Check inclusion filter: if include_tags is empty, include all; otherwise check if repo has any included tag
-                let included =
-                    include_tags.is_empty() || include_tags.iter().any(|tag| repo.has_tag(tag));
-
-                // Check exclusion filter: if exclude_tags is empty, exclude none; otherwise check if repo has any excluded tag
-                let excluded =
-                    !exclude_tags.is_empty() && exclude_tags.iter().any(|tag| repo.has_tag(tag));
-
-                included && !excluded
-            })
-            .collect()
+        filters::filter_repositories(&self.repositories, include_tags, exclude_tags, repos)
     }
 }
 
@@ -517,5 +466,118 @@ mod tests {
         let removed = config.remove_repository("repo1");
         assert!(removed);
         assert_eq!(config.repositories.len(), 1);
+    }
+
+    #[test]
+    fn test_fix_yaml_indentation() {
+        // Test basic array item indentation
+        let yaml = "repositories:\n- name: test\n  url: test.git";
+        let fixed = Config::fix_yaml_indentation(yaml);
+        assert!(fixed.contains("  - name: test"));
+        assert!(fixed.contains("    url: test.git"));
+
+        // Test already correctly indented yaml
+        let yaml = "repositories:\n  - name: test\n    url: test.git";
+        let fixed = Config::fix_yaml_indentation(yaml);
+        assert!(fixed.contains("  - name: test"));
+        assert!(fixed.contains("    url: test.git"));
+
+        // Test lines with different indentation levels
+        let yaml = "key: value\narray:\n- item1\n  subkey: subvalue";
+        let fixed = Config::fix_yaml_indentation(yaml);
+        assert!(fixed.contains("key: value"));
+        assert!(fixed.contains("  - item1"));
+        assert!(fixed.contains("    subkey: subvalue"));
+    }
+
+    #[test]
+    fn test_find_recipe() {
+        let mut config = Config::new();
+        let recipe = Recipe {
+            name: "test-recipe".to_string(),
+            steps: vec!["echo hello".to_string()],
+        };
+        config.recipes.push(recipe);
+
+        let found = config.find_recipe("test-recipe");
+        assert!(found.is_some());
+        assert_eq!(found.unwrap().name, "test-recipe");
+
+        let not_found = config.find_recipe("nonexistent");
+        assert!(not_found.is_none());
+    }
+
+    #[test]
+    fn test_config_new_default() {
+        let config1 = Config::new();
+        let config2 = Config::default();
+
+        assert_eq!(config1.repositories.len(), config2.repositories.len());
+        assert_eq!(config1.recipes.len(), config2.recipes.len());
+        assert!(config1.repositories.is_empty());
+        assert!(config1.recipes.is_empty());
+    }
+
+    #[test]
+    fn test_config_validate_empty() {
+        let config = Config::new();
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn test_load_config_alias() {
+        // Test that load_config is an alias for load
+        // We can't test actual file loading without creating temp files,
+        // but we can test that the method exists and has the same signature
+        let result1 = Config::load("nonexistent.yaml");
+        let result2 = Config::load_config("nonexistent.yaml");
+
+        // Both should fail in the same way (file not found)
+        assert!(result1.is_err());
+        assert!(result2.is_err());
+        // The error types should be similar (both IO errors for missing file)
+        assert_eq!(
+            result1.unwrap_err().to_string().contains("No such file"),
+            result2.unwrap_err().to_string().contains("No such file")
+        );
+    }
+
+    #[test]
+    fn test_filter_repositories_by_tag_alias() {
+        let config = create_test_config();
+
+        let result1 = config.filter_by_tag(Some("frontend"));
+        let result2 = config.filter_repositories_by_tag(Some("frontend"));
+
+        assert_eq!(result1.len(), result2.len());
+        assert_eq!(result1[0].name, result2[0].name);
+    }
+
+    #[test]
+    fn test_filter_repositories_exclude_tags() {
+        let config = create_test_config();
+
+        // Test excluding tags
+        let filtered = config.filter_repositories(
+            &[],                       // no include filter
+            &["frontend".to_string()], // exclude frontend
+            None,
+        );
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].name, "repo2"); // Only repo2 should remain
+
+        // Test excluding all repos
+        let filtered =
+            config.filter_repositories(&[], &["frontend".to_string(), "backend".to_string()], None);
+        assert_eq!(filtered.len(), 0);
+
+        // Test include and exclude together
+        let filtered = config.filter_repositories(
+            &["web".to_string(), "api".to_string()], // include web OR api
+            &["frontend".to_string()],               // but exclude frontend
+            None,
+        );
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].name, "repo2"); // repo2 has api but not frontend
     }
 }

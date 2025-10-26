@@ -6,6 +6,7 @@ pub mod init;
 pub mod pr;
 pub mod remove;
 pub mod run;
+pub mod validators;
 
 // Re-export the base types and all commands
 pub use base::{Command, CommandContext};

@@ -25,6 +25,7 @@ colored output and comprehensive logging.
 ## Testing Standards
 
 - **Maintain test-inventory.md with test cases for features, update test case status regularly**
+- **Avoid adding duplicate tests**
 - **Maintain high test coverage (aim for 80%)**
 
 ### Unit Tests

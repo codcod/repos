@@ -1,10 +1,10 @@
 //! Remove command implementation
 
 use super::{Command, CommandContext};
+use crate::git;
 use anyhow::Result;
 use async_trait::async_trait;
 use colored::*;
-use std::fs;
 
 /// Remove command for deleting cloned repositories
 pub struct RemoveCommand;
@@ -46,13 +46,20 @@ impl Command for RemoveCommand {
                 .map(|repo| {
                     let repo_name = repo.name.clone();
                     tokio::spawn(async move {
-                        let target_dir = repo.get_target_dir();
                         let result = tokio::task::spawn_blocking(move || {
-                            if std::path::Path::new(&target_dir).exists() {
-                                fs::remove_dir_all(&target_dir).map_err(anyhow::Error::from)
-                            } else {
-                                println!("{} | Directory does not exist", repo.name.cyan().bold());
-                                Ok(())
+                            match git::remove_repository(&repo) {
+                                Ok(_) => Ok(()),
+                                Err(e)
+                                    if e.to_string()
+                                        .contains("Repository directory does not exist") =>
+                                {
+                                    println!(
+                                        "{} | Directory does not exist",
+                                        repo.name.cyan().bold()
+                                    );
+                                    Ok(()) // Treat as success since desired state is achieved
+                                }
+                                Err(e) => Err(e),
                             }
                         })
                         .await?;
@@ -76,25 +83,25 @@ impl Command for RemoveCommand {
             }
         } else {
             for repo in repositories {
-                let target_dir = repo.get_target_dir();
-                if std::path::Path::new(&target_dir).exists() {
-                    match fs::remove_dir_all(&target_dir) {
-                        Ok(_) => {
-                            println!("{} | {}", repo.name.cyan().bold(), "Removed".green());
-                            successful += 1;
-                        }
-                        Err(e) => {
-                            eprintln!(
-                                "{} | {}",
-                                repo.name.cyan().bold(),
-                                format!("Error: {e}").red()
-                            );
-                            errors.push((repo.name.clone(), e.into()));
-                        }
+                match git::remove_repository(&repo) {
+                    Ok(_) => {
+                        successful += 1;
                     }
-                } else {
-                    println!("{} | Directory does not exist", repo.name.cyan().bold());
-                    successful += 1; // Count as success since the desired state is achieved
+                    Err(e)
+                        if e.to_string()
+                            .contains("Repository directory does not exist") =>
+                    {
+                        println!("{} | Directory does not exist", repo.name.cyan().bold());
+                        successful += 1; // Count as success since the desired state is achieved
+                    }
+                    Err(e) => {
+                        eprintln!(
+                            "{} | {}",
+                            repo.name.cyan().bold(),
+                            format!("Error: {e}").red()
+                        );
+                        errors.push((repo.name.clone(), e));
+                    }
                 }
             }
         }

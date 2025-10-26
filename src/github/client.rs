@@ -1,19 +1,77 @@
 //! GitHub API client implementation
+//!
+//! This module provides the main `GitHubClient` struct which serves as the entry point
+//! for all GitHub API operations. The client encapsulates authentication and HTTP client
+//! state, making it easy to perform various GitHub operations.
+//!
+//! ## Architecture
+//!
+//! The `GitHubClient` follows a modular design where different API endpoints are organized
+//! into separate modules:
+//! - `pull_requests.rs` - Pull request operations
+//! - `repositories.rs` - Repository information and releases
+//!
+//! Each module extends the `GitHubClient` with `impl` blocks containing related methods.
 
 use super::auth::GitHubAuth;
-use super::types::{PullRequestParams, constants::*};
 use anyhow::Result;
 use reqwest::Client;
-use serde_json::{Value, json};
 
-/// GitHub API client
+/// GitHub API client for interacting with GitHub's REST API
+///
+/// This client provides a unified interface for GitHub API operations, managing
+/// authentication and HTTP client state. Different API endpoints are organized
+/// into separate modules that extend this client with specific functionality.
+///
+/// ## Features
+///
+/// - **Authentication Management**: Handles GitHub token authentication
+/// - **URL Parsing**: Supports both GitHub.com and GitHub Enterprise URLs
+/// - **Modular Design**: API operations are organized by functionality
+/// - **Error Handling**: Comprehensive error handling for API responses
+///
+/// ## Example
+///
+/// ```rust,no_run
+/// use repos::github::GitHubClient;
+///
+/// # async fn example() -> anyhow::Result<()> {
+/// // Create client with authentication
+/// let client = GitHubClient::new(Some("your_github_token".to_string()));
+///
+/// // Parse repository URL
+/// let (owner, repo) = client.parse_github_url("https://github.com/owner/repo")?;
+///
+/// // Use client for various operations (see specific modules for examples)
+/// // - Pull requests: client.create_pull_request()
+/// // - Repositories: client.get_repository()
+/// # Ok(())
+/// # }
+/// ```
 pub struct GitHubClient {
-    client: Client,
-    auth: Option<GitHubAuth>,
+    pub(crate) client: Client,
+    pub(crate) auth: Option<GitHubAuth>,
 }
 
 impl GitHubClient {
     /// Create a new GitHub client
+    ///
+    /// # Arguments
+    /// * `token` - Optional GitHub personal access token for authentication
+    ///
+    /// # Returns
+    /// A new GitHubClient instance
+    ///
+    /// # Example
+    /// ```rust
+    /// use repos::github::GitHubClient;
+    ///
+    /// // Client without authentication (for public repositories)
+    /// let public_client = GitHubClient::new(None);
+    ///
+    /// // Client with authentication (for private repos and higher rate limits)
+    /// let auth_client = GitHubClient::new(Some("your_token".to_string()));
+    /// ```
     pub fn new(token: Option<String>) -> Self {
         let auth = token.map(GitHubAuth::new);
         Self {
@@ -23,7 +81,30 @@ impl GitHubClient {
     }
 
     /// Parse GitHub URL to extract owner and repository name
-    /// Supports both github.com and enterprise GitHub instances
+    ///
+    /// Supports both github.com and enterprise GitHub instances with various URL formats:
+    /// - SSH: `git@github.com:owner/repo` or `git@github-enterprise:owner/repo`
+    /// - HTTPS: `https://github.com/owner/repo` or `https://github-enterprise/owner/repo`
+    /// - Legacy: `github.com/owner/repo`
+    ///
+    /// # Arguments
+    /// * `url` - The GitHub repository URL to parse
+    ///
+    /// # Returns
+    /// A tuple containing (owner, repository_name)
+    ///
+    /// # Errors
+    /// Returns an error if the URL format is not recognized as a valid GitHub URL
+    ///
+    /// # Example
+    /// ```rust
+    /// use repos::github::GitHubClient;
+    ///
+    /// let client = GitHubClient::new(None);
+    /// let (owner, repo) = client.parse_github_url("https://github.com/rust-lang/rust").unwrap();
+    /// assert_eq!(owner, "rust-lang");
+    /// assert_eq!(repo, "rust");
+    /// ```
     pub fn parse_github_url(&self, url: &str) -> Result<(String, String)> {
         let url = url.trim_end_matches('/').trim_end_matches(".git");
 
@@ -49,46 +130,23 @@ impl GitHubClient {
             return Ok((owner, repo));
         }
 
-        Err(anyhow::anyhow!("Invalid GitHub URL: {}", url))
+        Err(anyhow::anyhow!("Invalid GitHub URL format: {}", url))
     }
 
-    /// Create a pull request
-    pub async fn create_pull_request(&self, params: PullRequestParams<'_>) -> Result<Value> {
-        let auth = self
-            .auth
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("GitHub token is required"))?;
+    /// Check if the client has authentication configured
+    ///
+    /// # Returns
+    /// `true` if the client has a GitHub token configured, `false` otherwise
+    pub fn is_authenticated(&self) -> bool {
+        self.auth.is_some()
+    }
 
-        let url = format!(
-            "{}/repos/{}/{}/pulls",
-            GITHUB_API_BASE, params.owner, params.repo
-        );
-
-        let payload = json!({
-            "title": params.title,
-            "body": params.body,
-            "head": params.head,
-            "base": params.base,
-            "draft": params.draft
-        });
-
-        let response = self
-            .client
-            .post(&url)
-            .header("Authorization", format!("token {}", auth.token()))
-            .header("User-Agent", DEFAULT_USER_AGENT)
-            .header("Accept", "application/vnd.github.v3+json")
-            .json(&payload)
-            .send()
-            .await?;
-
-        if response.status().is_success() {
-            let result: Value = response.json().await?;
-            Ok(result)
-        } else {
-            let error_text = response.text().await?;
-            Err(anyhow::anyhow!("GitHub API error: {}", error_text))
-        }
+    /// Get the authentication token (if available)
+    ///
+    /// # Returns
+    /// `Some(token)` if authenticated, `None` otherwise
+    pub fn token(&self) -> Option<&str> {
+        self.auth.as_ref().map(|auth| auth.token())
     }
 }
 
