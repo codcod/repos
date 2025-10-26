@@ -42,6 +42,27 @@ exit 0
         .output()
         .expect("Failed to run list-plugins");
 
+    if !output.status.success() {
+        eprintln!("=== FIRST COMMAND FAILED (list-plugins) ===");
+        eprintln!("Current dir: {:?}", current_dir);
+        eprintln!("Plugin dir: {:?}", plugin_dir);
+        eprintln!("Plugin path exists: {}", plugin_path.exists());
+        if plugin_path.exists() {
+            eprintln!(
+                "Plugin permissions: {:?}",
+                fs::metadata(&plugin_path).unwrap().permissions()
+            );
+        }
+        eprintln!(
+            "PATH: {}:{}",
+            plugin_dir.display(),
+            std::env::var("PATH").unwrap_or_default()
+        );
+        eprintln!("Exit status: {}", output.status);
+        eprintln!("stdout: {}", String::from_utf8_lossy(&output.stdout));
+        eprintln!("stderr: {}", String::from_utf8_lossy(&output.stderr));
+        eprintln!("=== END FIRST COMMAND DEBUG ===");
+    }
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("Available external plugins:"));
@@ -62,6 +83,27 @@ exit 0
         .output()
         .expect("Failed to run health plugin");
 
+    if !output.status.success() {
+        eprintln!("=== SECOND COMMAND FAILED (health plugin) ===");
+        eprintln!("Current dir: {:?}", current_dir);
+        eprintln!("Plugin dir: {:?}", plugin_dir);
+        eprintln!("Plugin path exists: {}", plugin_path.exists());
+        if plugin_path.exists() {
+            eprintln!(
+                "Plugin permissions: {:?}",
+                fs::metadata(&plugin_path).unwrap().permissions()
+            );
+        }
+        eprintln!(
+            "PATH: {}:{}",
+            plugin_dir.display(),
+            std::env::var("PATH").unwrap_or_default()
+        );
+        eprintln!("Exit status: {}", output.status);
+        eprintln!("stdout: {}", String::from_utf8_lossy(&output.stdout));
+        eprintln!("stderr: {}", String::from_utf8_lossy(&output.stderr));
+        eprintln!("=== END SECOND COMMAND DEBUG ===");
+    }
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("Mock health plugin executed"));
