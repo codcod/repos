@@ -9,6 +9,9 @@ fn test_plugin_system_integration() {
     let temp_dir = TempDir::new().unwrap();
     let plugin_dir = temp_dir.path();
 
+    // Get the current working directory to ensure we run commands from the right place
+    let current_dir = std::env::current_dir().expect("Failed to get current directory");
+
     // Create a mock plugin
     let plugin_content = r#"#!/bin/bash
 echo "Mock health plugin executed"
@@ -27,6 +30,7 @@ exit 0
     // Test list-plugins with our mock plugin
     let output = Command::new("cargo")
         .args(["run", "--", "--list-plugins"])
+        .current_dir(&current_dir)
         .env(
             "PATH",
             format!(
@@ -46,6 +50,7 @@ exit 0
     // Test calling the external plugin
     let output = Command::new("cargo")
         .args(["run", "--", "health", "--test", "argument"])
+        .current_dir(&current_dir)
         .env(
             "PATH",
             format!(
@@ -65,6 +70,7 @@ exit 0
     // Test non-existent plugin
     let output = Command::new("cargo")
         .args(["run", "--", "nonexistent"])
+        .current_dir(&current_dir)
         .output()
         .expect("Failed to run nonexistent plugin");
 
@@ -77,13 +83,37 @@ exit 0
 fn test_builtin_commands_still_work() {
     // Ensure built-in commands are not affected by plugin system
 
+    // Get the current working directory to ensure we run commands from the right place
+    let current_dir = std::env::current_dir().expect("Failed to get current directory");
+
+    // Build the binary first to avoid compilation races
+    let build_output = Command::new("cargo")
+        .args(["build"])
+        .current_dir(&current_dir)
+        .output()
+        .expect("Failed to build binary");
+
+    if !build_output.status.success() {
+        eprintln!("Build failed:");
+        eprintln!("stdout: {}", String::from_utf8_lossy(&build_output.stdout));
+        eprintln!("stderr: {}", String::from_utf8_lossy(&build_output.stderr));
+        panic!("Cannot run tests without successful build");
+    }
+
     // Test help command
     let output = Command::new("cargo")
         .args(["run", "--", "--help"])
+        .current_dir(&current_dir)
         .output()
         .expect("Failed to run help");
 
-    assert!(output.status.success());
+    if !output.status.success() {
+        eprintln!("Help command failed:");
+        eprintln!("stdout: {}", String::from_utf8_lossy(&output.stdout));
+        eprintln!("stderr: {}", String::from_utf8_lossy(&output.stderr));
+        eprintln!("status: {}", output.status);
+    }
+    assert!(output.status.success(), "Help command should succeed");
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("A cli tool to manage multiple GitHub repositories"));
     assert!(stdout.contains("list-plugins"));
@@ -93,6 +123,7 @@ fn test_builtin_commands_still_work() {
     let temp_empty_dir = TempDir::new().unwrap();
     let output = Command::new("cargo")
         .args(["run", "--", "--list-plugins"])
+        .current_dir(&current_dir)
         .env(
             "PATH",
             format!(
@@ -104,7 +135,16 @@ fn test_builtin_commands_still_work() {
         .output()
         .expect("Failed to run list-plugins");
 
-    assert!(output.status.success());
+    if !output.status.success() {
+        eprintln!("List-plugins command failed:");
+        eprintln!("stdout: {}", String::from_utf8_lossy(&output.stdout));
+        eprintln!("stderr: {}", String::from_utf8_lossy(&output.stderr));
+        eprintln!("status: {}", output.status);
+    }
+    assert!(
+        output.status.success(),
+        "List-plugins command should succeed"
+    );
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("No external plugins found"));
 }
