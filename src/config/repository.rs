@@ -50,7 +50,7 @@ impl Repository {
     /// Validate repository configuration
     pub fn validate(&self) -> Result<()> {
         crate::utils::validators::validate_repository(self)
-            .map_err(|errors| crate::utils::validators::validation_errors_to_anyhow(errors))
+            .map_err(crate::utils::validators::validation_errors_to_anyhow)
     }
 
     /// Get the target directory for cloning

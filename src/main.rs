@@ -1,5 +1,6 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
+use repos::commands::validators;
 use repos::{commands::*, config::Config, constants, plugins};
 use std::{env, path::PathBuf};
 
@@ -233,6 +234,12 @@ async fn execute_builtin_command(command: Commands) -> Result<()> {
             parallel,
         } => {
             let config = Config::load_config(&config)?;
+
+            // Validate clone command arguments using centralized validators
+            validators::validate_tag_filters(&tag)?;
+            validators::validate_tag_filters(&exclude_tag)?;
+            validators::validate_repository_names(&repos)?;
+
             let context = CommandContext {
                 config,
                 tag,
@@ -254,6 +261,14 @@ async fn execute_builtin_command(command: Commands) -> Result<()> {
             output_dir,
         } => {
             let config = Config::load_config(&config)?;
+
+            // Validate run command arguments using centralized validators
+            validators::validate_run_args(&command, &recipe)?;
+            validators::validate_tag_filters(&tag)?;
+            validators::validate_tag_filters(&exclude_tag)?;
+            validators::validate_repository_names(&repos)?;
+            validators::validate_output_directory(&output_dir)?;
+
             let context = CommandContext {
                 config,
                 tag,
@@ -261,15 +276,6 @@ async fn execute_builtin_command(command: Commands) -> Result<()> {
                 parallel,
                 repos: if repos.is_empty() { None } else { Some(repos) },
             };
-
-            // Validate that exactly one of command or recipe is provided
-            if command.is_none() && recipe.is_none() {
-                anyhow::bail!("Either --recipe or a command must be provided");
-            }
-
-            if command.is_some() && recipe.is_some() {
-                anyhow::bail!("Cannot specify both command and --recipe");
-            }
 
             if let Some(cmd) = command {
                 RunCommand::new_command(cmd, no_save, output_dir.map(PathBuf::from))
@@ -297,6 +303,16 @@ async fn execute_builtin_command(command: Commands) -> Result<()> {
             parallel,
         } => {
             let config = Config::load_config(&config)?;
+
+            // Validate PR command arguments using centralized validators
+            validators::validate_pr_args(&token)?;
+            validators::validate_tag_filters(&tag)?;
+            validators::validate_tag_filters(&exclude_tag)?;
+            validators::validate_repository_names(&repos)?;
+            validators::validate_branch_name(&branch)?;
+            validators::validate_branch_name(&base)?;
+            validators::validate_commit_message(&message)?;
+
             let context = CommandContext {
                 config,
                 tag,
@@ -329,6 +345,12 @@ async fn execute_builtin_command(command: Commands) -> Result<()> {
             parallel,
         } => {
             let config = Config::load_config(&config)?;
+
+            // Validate remove command arguments using centralized validators
+            validators::validate_tag_filters(&tag)?;
+            validators::validate_tag_filters(&exclude_tag)?;
+            validators::validate_repository_names(&repos)?;
+
             let context = CommandContext {
                 config,
                 tag,
