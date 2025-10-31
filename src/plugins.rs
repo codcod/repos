@@ -3,15 +3,67 @@ use std::env;
 use std::path::Path;
 use std::process::Command;
 
+use crate::config::{Config, Repository};
+
 /// Prefix for external plugin executables
 const PLUGIN_PREFIX: &str = "repos-";
 
-/// Try to execute an external plugin
-pub fn try_external_plugin(plugin_name: &str, args: &[String]) -> Result<()> {
+/// Context passed to plugins with pre-processed configuration and repositories
+#[derive(Debug, Clone)]
+pub struct PluginContext {
+    /// Reference to the loaded configuration
+    pub config: Config,
+    /// Filtered list of repositories based on tags/exclude-tags
+    pub repositories: Vec<Repository>,
+    /// Plugin-specific arguments (after plugin name)
+    pub args: Vec<String>,
+    /// Debug mode flag
+    pub debug: bool,
+}
+
+impl PluginContext {
+    /// Create a new plugin context
+    pub fn new(
+        config: Config,
+        repositories: Vec<Repository>,
+        args: Vec<String>,
+        debug: bool,
+    ) -> Self {
+        Self {
+            config,
+            repositories,
+            args,
+            debug,
+        }
+    }
+}
+
+/// Try to execute an external plugin with injected context
+pub fn try_external_plugin(plugin_name: &str, context: &PluginContext) -> Result<()> {
     let binary_name = format!("{}{}", PLUGIN_PREFIX, plugin_name);
 
+    // Serialize filtered repositories to a temporary file
+    let temp_file = tempfile::NamedTempFile::new()
+        .map_err(|e| anyhow::anyhow!("Failed to create temp file for plugin context: {}", e))?;
+
+    serde_json::to_writer(&temp_file, &context.repositories)
+        .map_err(|e| anyhow::anyhow!("Failed to serialize repositories: {}", e))?;
+
+    let repos_file_path = temp_file.path().to_string_lossy().to_string();
+
     let mut cmd = Command::new(&binary_name);
-    cmd.args(args);
+    cmd.args(&context.args)
+        .env("REPOS_PLUGIN_PROTOCOL", "1")
+        .env("REPOS_FILTERED_REPOS_FILE", &repos_file_path)
+        .env("REPOS_DEBUG", if context.debug { "1" } else { "0" })
+        .env(
+            "REPOS_TOTAL_REPOS",
+            context.config.repositories.len().to_string(),
+        )
+        .env(
+            "REPOS_FILTERED_COUNT",
+            context.repositories.len().to_string(),
+        );
 
     let status = cmd.status().map_err(|e| {
         anyhow::anyhow!(
@@ -20,6 +72,9 @@ pub fn try_external_plugin(plugin_name: &str, args: &[String]) -> Result<()> {
             e
         )
     })?;
+
+    // Keep temp file alive until plugin completes
+    drop(temp_file);
 
     if !status.success() {
         anyhow::bail!("Plugin '{}' exited with status: {}", binary_name, status);
