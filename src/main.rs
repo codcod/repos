@@ -205,9 +205,75 @@ async fn main() -> Result<()> {
             }
 
             let plugin_name = &args[0];
-            let plugin_args: Vec<String> = args.iter().skip(1).cloned().collect();
 
-            plugins::try_external_plugin(plugin_name, &plugin_args)?;
+            // Parse common options from plugin args
+            let mut config_path = constants::config::DEFAULT_CONFIG_FILE.to_string();
+            let mut include_tags = Vec::new();
+            let mut exclude_tags = Vec::new();
+            let mut debug = false;
+            let mut plugin_args = Vec::new();
+
+            let mut i = 1;
+            while i < args.len() {
+                match args[i].as_str() {
+                    "--config" | "-c" => {
+                        if i + 1 < args.len() {
+                            config_path = args[i + 1].clone();
+                            i += 2;
+                        } else {
+                            anyhow::bail!("--config requires a path argument");
+                        }
+                    }
+                    "--tag" | "-t" => {
+                        if i + 1 < args.len() {
+                            include_tags.push(args[i + 1].clone());
+                            i += 2;
+                        } else {
+                            anyhow::bail!("--tag requires a tag argument");
+                        }
+                    }
+                    "--exclude-tag" | "-e" => {
+                        if i + 1 < args.len() {
+                            exclude_tags.push(args[i + 1].clone());
+                            i += 2;
+                        } else {
+                            anyhow::bail!("--exclude-tag requires a tag argument");
+                        }
+                    }
+                    "--debug" | "-d" => {
+                        debug = true;
+                        i += 1;
+                    }
+                    _ => {
+                        // Plugin-specific arg
+                        plugin_args.push(args[i].clone());
+                        i += 1;
+                    }
+                }
+            }
+
+            // Load config and filter repositories (only if needed or if config exists)
+            let needs_config = !include_tags.is_empty()
+                || !exclude_tags.is_empty()
+                || std::path::Path::new(&config_path).exists();
+
+            let (config, filtered_repos) = if needs_config {
+                let config = Config::load_config(&config_path)?;
+                let filtered_repos = if include_tags.is_empty() && exclude_tags.is_empty() {
+                    config.repositories.clone()
+                } else {
+                    config.filter_repositories(&include_tags, &exclude_tags, None)
+                };
+                (config, filtered_repos)
+            } else {
+                // No config available, pass empty data
+                (Config::new(), Vec::new())
+            };
+
+            // Build plugin context
+            let context = plugins::PluginContext::new(config, filtered_repos, plugin_args, debug);
+
+            plugins::try_external_plugin(plugin_name, &context)?;
         }
         Some(command) => execute_builtin_command(command).await?,
         None => {

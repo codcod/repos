@@ -1,6 +1,5 @@
 use anyhow::{Context, Result};
-use chrono::Utc;
-use repos::{Config, Repository, load_default_config};
+use repos::Repository;
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::path::Path;
@@ -41,85 +40,26 @@ struct PrSummary {
 async fn main() -> Result<()> {
     let args: Vec<String> = env::args().collect();
 
-    // Parse arguments
-    let mut config_path: Option<String> = None;
-    let mut include_tags: Vec<String> = Vec::new();
-    let mut exclude_tags: Vec<String> = Vec::new();
-    let mut debug = false;
-    let mut mode = "deps"; // default mode
+    // Load context injected by core repos CLI
+    let repos = repos::load_plugin_context()
+        .context("Failed to load plugin context")?
+        .ok_or_else(|| anyhow::anyhow!("Plugin must be invoked via repos CLI"))?;
 
-    let mut i = 1;
-    while i < args.len() {
-        match args[i].as_str() {
-            "--help" | "-h" => {
-                print_help();
-                return Ok(());
-            }
-            "--config" => {
-                if i + 1 < args.len() {
-                    config_path = Some(args[i + 1].clone());
-                    i += 2;
-                } else {
-                    eprintln!("Error: --config requires a path argument");
-                    std::process::exit(1);
-                }
-            }
-            "--tag" => {
-                if i + 1 < args.len() {
-                    include_tags.push(args[i + 1].clone());
-                    i += 2;
-                } else {
-                    eprintln!("Error: --tag requires a tag argument");
-                    std::process::exit(1);
-                }
-            }
-            "--exclude-tag" => {
-                if i + 1 < args.len() {
-                    exclude_tags.push(args[i + 1].clone());
-                    i += 2;
-                } else {
-                    eprintln!("Error: --exclude-tag requires a tag argument");
-                    std::process::exit(1);
-                }
-            }
-            "--debug" | "-d" => {
-                debug = true;
-                i += 1;
-            }
-            arg if !arg.starts_with("--") => {
-                mode = arg;
-                i += 1;
-            }
-            _ => {
-                eprintln!("Unknown option: {}", args[i]);
-                print_help();
-                std::process::exit(1);
-            }
+    // Parse mode from arguments
+    let mut mode = "deps"; // default mode
+    for arg in &args[1..] {
+        if arg == "deps" || arg == "prs" {
+            mode = arg;
+            break;
+        } else if arg == "--help" || arg == "-h" {
+            print_help();
+            return Ok(());
         }
     }
 
-    // Load config (custom path or default)
-    let config = if let Some(path) = config_path {
-        Config::load_config(&path)
-            .with_context(|| format!("Failed to load config from {}", path))?
-    } else {
-        load_default_config().context("Failed to load default config")?
-    };
-
-    // Apply tag filters
-    let filtered_repos = filter_repositories(&config.repositories, &include_tags, &exclude_tags);
-
-    if debug {
-        eprintln!("DEBUG: Loaded {} repositories", config.repositories.len());
-        eprintln!(
-            "DEBUG: After filtering: {} repositories",
-            filtered_repos.len()
-        );
-    }
-
     match mode {
-        "deps" => run_deps_check(filtered_repos).await,
-        "prs" => run_pr_report(filtered_repos, debug).await,
+        "deps" => run_deps_check(repos).await,
+        "prs" => run_pr_report(repos).await,
         _ => {
             eprintln!("Unknown mode: {}. Use 'deps' or 'prs'", mode);
             print_help();
@@ -128,31 +68,11 @@ async fn main() -> Result<()> {
     }
 }
 
-fn filter_repositories(
-    repos: &[Repository],
-    include_tags: &[String],
-    exclude_tags: &[String],
-) -> Vec<Repository> {
-    let mut filtered = repos.to_vec();
-
-    // Apply include tags (intersection)
-    if !include_tags.is_empty() {
-        filtered.retain(|repo| include_tags.iter().any(|tag| repo.tags.contains(tag)));
-    }
-
-    // Apply exclude tags (difference)
-    if !exclude_tags.is_empty() {
-        filtered.retain(|repo| !exclude_tags.iter().any(|tag| repo.tags.contains(tag)));
-    }
-
-    filtered
-}
-
 fn print_help() {
     println!("repos-health - Repository health checks and reports");
     println!();
     println!("USAGE:");
-    println!("    repos health [OPTIONS] [MODE]");
+    println!("    repos health [MODE]");
     println!();
     println!("MODES:");
     println!("    deps    Check and update npm dependencies (default)");
@@ -160,13 +80,12 @@ fn print_help() {
     println!();
     println!("DEPS MODE:");
     println!("    Scans repositories for outdated npm packages and automatically");
-    println!("    updates them, creates branches, and commits changes.");
+    println!("    updates them locally.");
     println!();
     println!("    For each repository with a package.json file:");
     println!("    1. Checks for outdated npm packages");
     println!("    2. Updates packages if found");
-    println!("    3. Creates a branch and commits changes");
-    println!("    4. Pushes the branch to origin");
+    println!("    3. Reports changes for manual commit");
     println!();
     println!("PRS MODE:");
     println!("    Generates a report of open pull requests awaiting approval");
@@ -180,34 +99,12 @@ fn print_help() {
     println!("    - Repositories must be GitHub repositories");
     println!();
     println!("OPTIONS:");
-    println!("    -h, --help              Print this help message");
-    println!("    -d, --debug             Enable debug output (shows URL parsing)");
-    println!("    --config <path>         Use custom config file instead of default");
-    println!(
-        "    --tag <tag>             Filter to repositories with this tag (can be used multiple times)"
-    );
-    println!(
-        "    --exclude-tag <tag>     Exclude repositories with this tag (can be used multiple times)"
-    );
+    println!("    -h, --help    Print this help message");
     println!();
     println!("EXAMPLES:");
-    println!(
-        "    repos health                                    # Run dependency check (default)"
-    );
-    println!(
-        "    repos health deps                               # Explicitly run dependency check"
-    );
-    println!("    repos health prs                                # Generate PR report");
-    println!(
-        "    repos health prs --debug                        # Generate PR report with debug info"
-    );
-    println!(
-        "    repos health prs --tag flow                     # PRs for 'flow' tagged repos only"
-    );
-    println!(
-        "    repos health deps --exclude-tag deprecated      # Deps check excluding deprecated repos"
-    );
-    println!("    repos health prs --config custom.yaml --tag ci  # Custom config with tag filter");
+    println!("    repos health          # Run dependency check (default)");
+    println!("    repos health deps     # Explicitly run dependency check");
+    println!("    repos health prs      # Generate PR report");
 }
 
 async fn run_deps_check(repos: Vec<Repository>) -> Result<()> {
@@ -223,60 +120,36 @@ async fn run_deps_check(repos: Vec<Repository>) -> Result<()> {
     Ok(())
 }
 
-async fn run_pr_report(repos: Vec<Repository>, debug: bool) -> Result<()> {
-    let token = env::var("GITHUB_TOKEN")
-        .context("GITHUB_TOKEN environment variable required for PR reporting")?;
+async fn run_pr_report(repos: Vec<Repository>) -> Result<()> {
+    let github_token = std::env::var("GITHUB_TOKEN").context("GITHUB_TOKEN not set")?;
+    let mut reports = Vec::new();
 
-    println!("=================================================");
-    println!("  GitHub Pull Requests - Approval Status Report");
-    println!("=================================================");
-    println!();
-
-    let mut total_repos = 0;
-    let mut total_prs = 0;
-    let mut total_awaiting = 0;
-
-    for repo in repos {
-        if debug {
-            eprintln!("DEBUG: Processing repo: {} ({})", repo.name, repo.url);
-        }
-
-        match fetch_pr_report(&repo, &token, debug).await {
-            Ok(report) => {
-                total_repos += 1;
-                total_prs += report.total_prs;
-                total_awaiting += report.awaiting_approval.len();
-
-                print_repo_report(&report);
-            }
-            Err(e) => {
-                eprintln!("❌ {}: {}", repo.name, e);
-            }
+    for repo in &repos {
+        match fetch_pr_report(repo, &github_token).await {
+            Ok(report) => reports.push(report),
+            Err(e) => eprintln!("Error fetching PRs for {}: {}", repo.name, e),
         }
     }
 
-    println!();
-    println!("=================================================");
-    println!("Summary:");
-    println!("  Repositories checked: {}", total_repos);
-    println!("  Total open PRs: {}", total_prs);
-    println!("  PRs awaiting approval: {}", total_awaiting);
-    println!("=================================================");
+    println!("\n=== Pull Request Report ===\n");
+    for report in &reports {
+        print_repo_report(report);
+    }
+
+    let total_prs: usize = reports.iter().map(|r| r.total_prs).sum();
+    let total_awaiting: usize = reports.iter().map(|r| r.awaiting_approval.len()).sum();
+    println!(
+        "Total: {} open PRs, {} awaiting review assignment",
+        total_prs, total_awaiting
+    );
 
     Ok(())
 }
 
-async fn fetch_pr_report(repo: &Repository, token: &str, debug: bool) -> Result<PrReport> {
+async fn fetch_pr_report(repo: &Repository, token: &str) -> Result<PrReport> {
     // Parse owner/repo from URL
     let (owner, repo_name) = parse_github_repo(&repo.url)
         .with_context(|| format!("Failed to parse GitHub URL: {}", repo.url))?;
-
-    if debug {
-        eprintln!(
-            "DEBUG: Parsed {} => owner: {}, repo: {}",
-            repo.url, owner, repo_name
-        );
-    }
 
     // Fetch open PRs from GitHub API
     let client = reqwest::Client::new();
@@ -284,10 +157,6 @@ async fn fetch_pr_report(repo: &Repository, token: &str, debug: bool) -> Result<
         "https://api.github.com/repos/{}/{}/pulls?state=open",
         owner, repo_name
     );
-
-    if debug {
-        eprintln!("DEBUG: API URL: {}", url);
-    }
 
     let response = client
         .get(&url)
@@ -423,12 +292,9 @@ fn process_repo(repo: &Repository) -> Result<()> {
         return Ok(());
     }
 
-    let branch = format!("health/deps-{}", short_timestamp());
-    create_branch_and_commit(path, &branch, repo, &outdated)?;
-    push_branch(path, &branch)?;
     println!(
-        "health: {} branch {} pushed - use 'repos pr' to create pull request",
-        repo.name, branch
+        "health: {} dependencies updated - review changes and commit manually",
+        repo.name
     );
     Ok(())
 }
@@ -491,45 +357,6 @@ fn has_lockfile_changes(repo_path: &Path) -> Result<bool> {
     Ok(patterns.iter().any(|p| text.contains(p)))
 }
 
-fn create_branch_and_commit(
-    repo_path: &Path,
-    branch: &str,
-    repo: &Repository,
-    deps: &[String],
-) -> Result<()> {
-    run(repo_path, ["git", "checkout", "-b", branch])?;
-    run(repo_path, ["git", "add", "."])?; // minimal; could restrict
-    let msg = format!("chore(health): update dependencies ({})", deps.join(", "));
-    run(repo_path, ["git", "commit", "-m", &msg])?;
-    println!(
-        "health: {} committed dependency updates on {}",
-        repo.name, branch
-    );
-    Ok(())
-}
-
-fn push_branch(repo_path: &Path, branch: &str) -> Result<()> {
-    run(repo_path, ["git", "push", "-u", "origin", branch])?;
-    Ok(())
-}
-
-fn run<P: AsRef<Path>, const N: usize>(cwd: P, cmd: [&str; N]) -> Result<()> {
-    let status = Command::new(cmd[0])
-        .args(&cmd[1..])
-        .current_dir(cwd.as_ref())
-        .status()
-        .with_context(|| format!("exec {:?}", cmd))?;
-    if !status.success() {
-        anyhow::bail!("command {:?} failed", cmd);
-    }
-    Ok(())
-}
-
-fn short_timestamp() -> String {
-    let now = Utc::now();
-    format!("{}", now.format("%Y%m%d"))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -541,15 +368,6 @@ mod tests {
         print_help();
         // If we reach this point, the function executed successfully
         // Test passes if print_help() completes without panicking
-    }
-
-    #[test]
-    fn test_short_timestamp_format() {
-        let timestamp = short_timestamp();
-        // Should be 8 characters in YYYYMMDD format
-        assert_eq!(timestamp.len(), 8);
-        // Should be all digits
-        assert!(timestamp.chars().all(|c| c.is_ascii_digit()));
     }
 
     #[test]
@@ -687,28 +505,6 @@ mod tests {
         assert!(result.unwrap_err().to_string().contains("no package.json"));
     }
 
-    #[test]
-    fn test_run_command_execution() {
-        // Test the run function execution path
-        let temp_dir = TempDir::new().unwrap();
-        let repo_path = temp_dir.path();
-
-        // Test with a simple command that should succeed
-        let result = run(repo_path, ["echo", "test"]);
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn test_run_command_failure() {
-        // Test the run function error path
-        let temp_dir = TempDir::new().unwrap();
-        let repo_path = temp_dir.path();
-
-        // Test with a command that should fail
-        let result = run(repo_path, ["nonexistent_command_12345"]);
-        assert!(result.is_err());
-    }
-
     #[tokio::test]
     async fn test_fetch_pr_report_invalid_url() {
         let repo = Repository {
@@ -720,7 +516,7 @@ mod tests {
             config_dir: None,
         };
 
-        let result = fetch_pr_report(&repo, "fake-token", false).await;
+        let result = fetch_pr_report(&repo, "fake-token").await;
         assert!(result.is_err());
     }
 }

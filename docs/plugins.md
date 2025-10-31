@@ -8,7 +8,151 @@ The plugin system follows the same pattern as Git's external subcommands:
 
 - Any executable named `repos-<plugin>` in your `PATH` becomes a plugin
 - When you run `repos <plugin> <args>`, the tool automatically finds and executes `repos-<plugin>` with the provided arguments
+- **NEW**: The core `repos` CLI automatically handles common options (`--config`, `--tag`, `--exclude-tag`, `--debug`) and passes filtered context to plugins via environment variables
 - This provides complete isolation, crash safety, and the ability to write plugins in any language
+
+## Context Injection (Simplified Plugin Development)
+
+As of version 0.0.10, plugins can opt into receiving pre-processed context from the core `repos` CLI. This means plugins don't need to:
+
+- Parse `--config`, `--tag`, `--exclude-tag`, `--debug` options themselves
+- Load and parse the YAML configuration file
+- Apply tag filtering logic
+
+### How Context Injection Works
+
+When you run:
+
+```bash
+repos health --config custom.yaml --tag flow --exclude-tag deprecated prs
+```
+
+The core CLI:
+
+1. Parses `--config`, `--tag`, `--exclude-tag` options
+2. Loads the config file
+3. Applies tag filtering (28 repos → 5 repos matching criteria)
+4. Serializes filtered repositories to a temp JSON file
+5. Sets environment variables:
+   - `REPOS_PLUGIN_PROTOCOL=1` (indicates context injection is available)
+   - `REPOS_FILTERED_REPOS_FILE=/tmp/repos-xxx.json` (path to filtered repos)
+   - `REPOS_DEBUG=1` (if --debug flag was passed)
+   - `REPOS_TOTAL_REPOS=28` (total repos in config)
+   - `REPOS_FILTERED_COUNT=5` (repos after filtering)
+6. Executes `repos-health prs` with only plugin-specific args
+
+### Using Context Injection in Your Plugin
+
+**Rust Example:**
+
+```rust
+use anyhow::Result;
+use repos::{Repository, load_plugin_context, is_debug_mode};
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    // Try to load injected context
+    let repos = if let Some(repos) = load_plugin_context()? {
+        // New protocol: use pre-filtered repos from core CLI
+        let debug = is_debug_mode();
+        if debug {
+            eprintln!("Using injected context with {} repos", repos.len());
+        }
+        repos
+    } else {
+        // Legacy fallback: parse args and load config manually
+        // (for backwards compatibility when run directly)
+        load_config_manually()?
+    };
+
+    // Now just implement your plugin logic
+    for repo in repos {
+        println!("Processing: {}", repo.name);
+        // Your plugin functionality here
+    }
+
+    Ok(())
+}
+```
+
+**Python Example:**
+
+```python
+#!/usr/bin/env python3
+import os
+import json
+import sys
+
+def main():
+    # Check if context injection is available
+    if os.environ.get('REPOS_PLUGIN_PROTOCOL') == '1':
+        # Load pre-filtered repositories
+        repos_file = os.environ.get('REPOS_FILTERED_REPOS_FILE')
+        with open(repos_file, 'r') as f:
+            repos = json.load(f)
+
+        debug = os.environ.get('REPOS_DEBUG') == '1'
+        if debug:
+            total = os.environ.get('REPOS_TOTAL_REPOS', '?')
+            print(f"Using injected context: {len(repos)}/{total} repos", file=sys.stderr)
+    else:
+        # Legacy fallback: parse args and load config manually
+        repos = load_config_manually()
+
+    # Implement plugin logic with filtered repos
+    for repo in repos:
+        print(f"Processing: {repo['name']}")
+        # Your plugin functionality here
+
+if __name__ == '__main__':
+    main()
+```
+
+**Bash Example:**
+
+```bash
+#!/bin/bash
+
+# Check if context injection is available
+if [ "$REPOS_PLUGIN_PROTOCOL" = "1" ]; then
+    # Load pre-filtered repositories
+    REPOS=$(cat "$REPOS_FILTERED_REPOS_FILE")
+
+    if [ "$REPOS_DEBUG" = "1" ]; then
+        echo "Using injected context: $REPOS_FILTERED_COUNT/$REPOS_TOTAL_REPOS repos" >&2
+    fi
+
+    # Process filtered repos using jq
+    echo "$REPOS" | jq -r '.[] | .name' | while read -r repo_name; do
+        echo "Processing: $repo_name"
+        # Your plugin functionality here
+    done
+else
+    # Legacy fallback: parse args and load config manually
+    # (for backwards compatibility when run directly)
+    echo "Loading config manually..." >&2
+    # ... manual config loading logic ...
+fi
+```
+
+### Benefits of Context Injection
+
+1. **Less boilerplate**: No need to parse common CLI options
+2. **Consistent behavior**: Filtering works the same across all plugins
+3. **Better performance**: Config loaded once, not per plugin
+4. **Backwards compatible**: Plugins still work when run directly
+5. **Language agnostic**: Available via environment variables
+
+### Supported Common Options
+
+When invoking plugins through `repos <plugin>`, these options are automatically handled:
+
+- `--config <path>` or `-c <path>`: Custom config file
+- `--tag <tag>` or `-t <tag>`: Filter repos by tag (can be repeated)
+- `--exclude-tag <tag>` or `-e <tag>`: Exclude repos by tag (can be repeated)
+- `--debug` or `-d`: Enable debug output
+
+All other arguments are passed to the plugin as-is.
 
 ## Creating a Plugin
 
