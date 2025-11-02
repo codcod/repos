@@ -3,6 +3,7 @@
 pub mod base;
 pub mod clone;
 pub mod init;
+pub mod ls;
 pub mod pr;
 pub mod remove;
 pub mod run;
@@ -12,6 +13,7 @@ pub mod validators;
 pub use base::{Command, CommandContext};
 pub use clone::CloneCommand;
 pub use init::InitCommand;
+pub use ls::ListCommand;
 pub use pr::PrCommand;
 pub use remove::RemoveCommand;
 pub use run::RunCommand;

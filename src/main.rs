@@ -156,6 +156,24 @@ enum Commands {
         parallel: bool,
     },
 
+    /// List repositories with optional filtering
+    Ls {
+        /// Specific repository names to list (if not provided, uses tag filter or all repos)
+        repos: Vec<String>,
+
+        /// Configuration file path
+        #[arg(short, long, default_value_t = constants::config::DEFAULT_CONFIG_FILE.to_string())]
+        config: String,
+
+        /// Filter repositories by tag (can be specified multiple times)
+        #[arg(short, long)]
+        tag: Vec<String>,
+
+        /// Exclude repositories with these tags (can be specified multiple times)
+        #[arg(short = 'e', long)]
+        exclude_tag: Vec<String>,
+    },
+
     /// Create a config.yaml file from discovered Git repositories
     Init {
         /// Output file name
@@ -425,6 +443,28 @@ async fn execute_builtin_command(command: Commands) -> Result<()> {
                 repos: if repos.is_empty() { None } else { Some(repos) },
             };
             RemoveCommand.execute(&context).await?;
+        }
+        Commands::Ls {
+            repos,
+            config,
+            tag,
+            exclude_tag,
+        } => {
+            let config = Config::load_config(&config)?;
+
+            // Validate list command arguments using centralized validators
+            validators::validate_tag_filters(&tag)?;
+            validators::validate_tag_filters(&exclude_tag)?;
+            validators::validate_repository_names(&repos)?;
+
+            let context = CommandContext {
+                config,
+                tag,
+                exclude_tag,
+                parallel: false, // List command doesn't need parallel execution
+                repos: if repos.is_empty() { None } else { Some(repos) },
+            };
+            ListCommand.execute(&context).await?;
         }
         Commands::Init {
             output,
