@@ -102,6 +102,7 @@ overview. Click on a command to see its detailed documentation.
 | Command | Description |
 |---|---|
 | [**`clone`**](./docs/commands/clone.md) | Clones repositories from your config file. |
+| [**`ls`**](./docs/commands/ls.md) | Lists repositories with optional filtering. |
 | [**`run`**](./docs/commands/run.md) | Runs a shell command or a pre-defined recipe in each repository. |
 | [**`pr`**](./docs/commands/pr.md) | Creates pull requests for repositories with changes. |
 | [**`rm`**](./docs/commands/rm.md) | Removes cloned repositories from your local disk. |
