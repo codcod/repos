@@ -206,22 +206,86 @@ jobs:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config user.name "GitHub Action"
+          git config user.email "action@github.com"
+
       - name: Fast-forward main
+        id: ff-main
         run: |
           RELEASE_BRANCH="${GITHUB_REF_NAME}"
           git fetch origin main
           git fetch origin "$RELEASE_BRANCH"
           git checkout main
           if git merge --ff-only "origin/$RELEASE_BRANCH"; then
-            git config user.name "GitHub Action"
-            git config user.email "action@github.com"
-            git push origin main
             echo "FAST_FORWARD=1" >> $GITHUB_ENV
+            echo "fast_forward=true" >> $GITHUB_OUTPUT
           else
             echo "FAST_FORWARD=0" >> $GITHUB_ENV
+            echo "fast_forward=false" >> $GITHUB_OUTPUT
           fi
+
+      - name: Update version for next release
+        if: steps.ff-main.outputs.fast_forward == 'true'
+        run: |
+          # Extract current version from Cargo.toml
+          CURRENT_VERSION=$(grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+          echo "Current version: $CURRENT_VERSION"
+
+          # Parse semantic version components
+          if [[ $CURRENT_VERSION =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)(-.*)?$ ]]; then
+            MAJOR="${BASH_REMATCH[1]}"
+            MINOR="${BASH_REMATCH[2]}"
+            PATCH="${BASH_REMATCH[3]}"
+            PRERELEASE="${BASH_REMATCH[4]}"
+
+            # Determine next version based on release type
+            # If this was a minor version bump (e.g., 0.0.10 -> 0.1.0),
+            # set next as 0.2.0-rc for the next feature
+            if [[ $PATCH -eq 0 && -z $PRERELEASE ]]; then
+              # Clean release, bump minor and add -rc
+              NEXT_MINOR=$((MINOR + 1))
+              NEXT_VERSION="${MAJOR}.${NEXT_MINOR}.0-rc"
+            elif [[ -n $PRERELEASE ]]; then
+              # Already a prerelease, keep it or update
+              NEXT_VERSION="$CURRENT_VERSION"
+            else
+              # Patch release, prepare next minor with -rc
+              NEXT_MINOR=$((MINOR + 1))
+              NEXT_VERSION="${MAJOR}.${NEXT_MINOR}.0-rc"
+            fi
+
+            echo "Next version: $NEXT_VERSION"
+
+            # Update Cargo.toml with next version
+            sed -i.bak "s/^version = \".*\"/version = \"$NEXT_VERSION\"/" Cargo.toml && rm Cargo.toml.bak
+
+            # Check if there are actual changes
+            if git diff --quiet Cargo.toml; then
+              echo "No version changes needed"
+              echo "VERSION_UPDATED=false" >> $GITHUB_ENV
+            else
+              echo "Version updated to $NEXT_VERSION"
+              echo "VERSION_UPDATED=true" >> $GITHUB_ENV
+              echo "NEXT_VERSION=$NEXT_VERSION" >> $GITHUB_ENV
+            fi
+          else
+            echo "Failed to parse version: $CURRENT_VERSION"
+            exit 1
+          fi
+
+      - name: Commit version update
+        if: env.VERSION_UPDATED == 'true'
+        run: |
+          git add Cargo.toml
+          git commit -m "chore: bump version to ${{ env.NEXT_VERSION }} [skip ci]"
+          git push origin main
+          echo "Version ${{ env.NEXT_VERSION }} committed to main branch"
+
       - name: Create PR (non fast-forward)
-        if: env.FAST_FORWARD == '0'
+        if: steps.ff-main.outputs.fast_forward == 'false'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
