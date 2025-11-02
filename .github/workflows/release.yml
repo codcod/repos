@@ -147,12 +147,18 @@ jobs:
           key: ${{ matrix.target }}
       - name: Build
         run: cargo build --release --target ${{ matrix.target }}
+      - name: Build plugins
+        run: cargo build --release --target ${{ matrix.target }} -p repos-health
       - name: Strip (Linux)
         if: startsWith(matrix.target, 'x86_64-unknown-linux')
-        run: strip target/${{ matrix.target }}/release/repos
+        run: |
+          strip target/${{ matrix.target }}/release/repos
+          strip target/${{ matrix.target }}/release/repos-health
       - name: Strip (macOS)
         if: contains(matrix.target, 'apple-darwin')
-        run: strip -x target/${{ matrix.target }}/release/repos || true
+        run: |
+          strip -x target/${{ matrix.target }}/release/repos || true
+          strip -x target/${{ matrix.target }}/release/repos-health || true
       - name: Package
         run: |
           staging="repos-${{ needs.semantic-version.outputs.version }}-${{ matrix.target }}"
@@ -160,11 +166,19 @@ jobs:
           cp target/${{ matrix.target }}/release/repos "$staging/"
           tar czf "$staging.tar.gz" "$staging"
           echo "ASSET=$staging.tar.gz" >> $GITHUB_ENV
+
+          plugin_staging="repos-health-${{ needs.semantic-version.outputs.version }}-${{ matrix.target }}"
+          mkdir "$plugin_staging"
+          cp target/${{ matrix.target }}/release/repos-health "$plugin_staging/"
+          tar czf "$plugin_staging.tar.gz" "$plugin_staging"
+          echo "PLUGIN_ASSET=$plugin_staging.tar.gz" >> $GITHUB_ENV
       - name: Upload Asset
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.semantic-version.outputs.version_tag }}
-          files: ${{ env.ASSET }}
+          files: |
+            ${{ env.ASSET }}
+            ${{ env.PLUGIN_ASSET }}
 
   build-universal-macos:
     name: Universal macOS
@@ -180,6 +194,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo build --release --target x86_64-apple-darwin
       - run: cargo build --release --target aarch64-apple-darwin
+      - run: cargo build --release --target x86_64-apple-darwin -p repos-health
+      - run: cargo build --release --target aarch64-apple-darwin -p repos-health
       - run: |
           lipo -create \
             target/x86_64-apple-darwin/release/repos \
@@ -191,10 +207,23 @@ jobs:
           mv repos "$staging/"
           tar czf "$staging.tar.gz" "$staging"
           echo "UNIVERSAL=$staging.tar.gz" >> $GITHUB_ENV
+
+          lipo -create \
+            target/x86_64-apple-darwin/release/repos-health \
+            target/aarch64-apple-darwin/release/repos-health \
+            -output repos-health
+          strip -x repos-health || true
+          plugin_staging="repos-health-${{ needs.semantic-version.outputs.version }}-universal-apple-darwin"
+          mkdir "$plugin_staging"
+          mv repos-health "$plugin_staging/"
+          tar czf "$plugin_staging.tar.gz" "$plugin_staging"
+          echo "UNIVERSAL_PLUGIN=$plugin_staging.tar.gz" >> $GITHUB_ENV
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.semantic-version.outputs.version_tag }}
-          files: ${{ env.UNIVERSAL }}
+          files: |
+            ${{ env.UNIVERSAL }}
+            ${{ env.UNIVERSAL_PLUGIN }}
 
   sync-main:
     name: Sync version back to main
