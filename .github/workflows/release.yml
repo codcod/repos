@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - 'release/**'
+      - 'chore/version-bump-*'
   workflow_dispatch:
 
 permissions:
@@ -276,13 +277,27 @@ jobs:
             exit 1
           fi
 
-      - name: Commit version update
-        if: env.VERSION_UPDATED == 'true'
+      - name: Commit version update (create branch, not main)
+        if: env.VERSION_UPDATED == 'true' && steps.ff-main.outputs.fast_forward == 'true'
         run: |
+          BRANCH="chore/version-bump-${{ env.NEXT_VERSION }}"
+          git checkout -b "$BRANCH"
           git add Cargo.toml
-          git commit -m "chore: bump version to ${{ env.NEXT_VERSION }} [skip ci]"
-          git push origin main
-          echo "Version ${{ env.NEXT_VERSION }} committed to main branch"
+          git commit -m "chore: bump version to ${{ env.NEXT_VERSION }}"
+          git push origin "$BRANCH"
+          echo "BUMP_BRANCH=$BRANCH" >> $GITHUB_ENV
+          echo "Version bump branch $BRANCH created and pushed"
+
+      - name: Create PR for version bump
+        if: env.VERSION_UPDATED == 'true' && steps.ff-main.outputs.fast_forward == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr create \
+            --base main \
+            --head "${{ env.BUMP_BRANCH }}" \
+            --title "chore: bump version to ${{ env.NEXT_VERSION }}" \
+            --body "Automatic version bump after release. Prepare ${{ env.NEXT_VERSION }} as next release candidate."
 
       - name: Create PR (non fast-forward)
         if: steps.ff-main.outputs.fast_forward == 'false'
