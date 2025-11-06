@@ -236,6 +236,7 @@ jobs:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
+          token: ${{ secrets.PAT_TOKEN }}
 
       - name: Configure Git
         run: |
@@ -310,6 +311,10 @@ jobs:
         if: env.VERSION_UPDATED == 'true' && steps.ff-main.outputs.fast_forward == 'true'
         run: |
           BRANCH="chore/version-bump-${{ env.NEXT_VERSION }}"
+
+          # Delete remote branch if it exists
+          git push origin --delete "$BRANCH" 2>/dev/null || true
+
           git checkout -b "$BRANCH"
           git add Cargo.toml
           git commit -m "chore: bump version to ${{ env.NEXT_VERSION }}"
@@ -320,18 +325,25 @@ jobs:
       - name: Create PR for version bump
         if: env.VERSION_UPDATED == 'true' && steps.ff-main.outputs.fast_forward == 'true'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
-          gh pr create \
-            --base main \
-            --head "${{ env.BUMP_BRANCH }}" \
-            --title "chore: bump version to ${{ env.NEXT_VERSION }}" \
-            --body "Automatic version bump after release. Prepare ${{ env.NEXT_VERSION }} as next release candidate."
+          # Check if PR already exists
+          EXISTING_PR=$(gh pr list --head "${{ env.BUMP_BRANCH }}" --base main --json number --jq '.[0].number' 2>/dev/null || echo "")
+
+          if [ -n "$EXISTING_PR" ]; then
+            echo "PR #$EXISTING_PR already exists, skipping creation"
+          else
+            gh pr create \
+              --base main \
+              --head "${{ env.BUMP_BRANCH }}" \
+              --title "chore: bump version to ${{ env.NEXT_VERSION }}" \
+              --body "Automatic version bump after release. Prepare ${{ env.NEXT_VERSION }} as next release candidate."
+          fi
 
       - name: Create PR (non fast-forward)
         if: steps.ff-main.outputs.fast_forward == 'false'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
           gh pr create \
             --base main \
