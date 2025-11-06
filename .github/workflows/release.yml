@@ -324,29 +324,27 @@ jobs:
 
       - name: Create PR for version bump
         if: env.VERSION_UPDATED == 'true' && steps.ff-main.outputs.fast_forward == 'true'
-        env:
-          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
           # Check if PR already exists
-          EXISTING_PR=$(gh pr list --head "${{ env.BUMP_BRANCH }}" --base main --json number --jq '.[0].number' 2>/dev/null || echo "")
+          EXISTING_PR=$(curl -s -H "Authorization: token ${{ secrets.PAT_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/pulls?head=${{ github.repository_owner }}:${{ env.BUMP_BRANCH }}&base=main" \
+            | jq -r '.[0].number // empty')
 
           if [ -n "$EXISTING_PR" ]; then
             echo "PR #$EXISTING_PR already exists, skipping creation"
           else
-            gh pr create \
-              --base main \
-              --head "${{ env.BUMP_BRANCH }}" \
-              --title "chore: bump version to ${{ env.NEXT_VERSION }}" \
-              --body "Automatic version bump after release. Prepare ${{ env.NEXT_VERSION }} as next release candidate."
+            curl -X POST \
+              -H "Authorization: token ${{ secrets.PAT_TOKEN }}" \
+              -H "Accept: application/vnd.github.v3+json" \
+              "https://api.github.com/repos/${{ github.repository }}/pulls" \
+              -d "{\"title\":\"chore: bump version to ${{ env.NEXT_VERSION }}\",\"head\":\"${{ env.BUMP_BRANCH }}\",\"base\":\"main\",\"body\":\"Automatic version bump after release. Prepare ${{ env.NEXT_VERSION }} as next release candidate.\"}"
           fi
 
       - name: Create PR (non fast-forward)
         if: steps.ff-main.outputs.fast_forward == 'false'
-        env:
-          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
-          gh pr create \
-            --base main \
-            --head "${GITHUB_REF_NAME}" \
-            --title "chore: sync version ${{ needs.semantic-version.outputs.version }}" \
-            --body "Automatic version sync after release v${{ needs.semantic-version.outputs.version }}."
+          curl -X POST \
+            -H "Authorization: token ${{ secrets.PAT_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/${{ github.repository }}/pulls" \
+            -d "{\"title\":\"chore: sync version ${{ needs.semantic-version.outputs.version }}\",\"head\":\"${GITHUB_REF_NAME}\",\"base\":\"main\",\"body\":\"Automatic version sync after release v${{ needs.semantic-version.outputs.version }}.\"}"
