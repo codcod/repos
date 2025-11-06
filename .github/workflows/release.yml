@@ -183,7 +183,7 @@ jobs:
   build-universal-macos:
     name: Universal macOS
     runs-on: macos-latest
-    needs: [semantic-version, update-version, build-matrix]
+    needs: [semantic-version, update-version, build-matrix, create-release]
     steps:
       - uses: actions/checkout@v5
         with:
