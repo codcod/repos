@@ -573,11 +573,11 @@ mod tests {
 
         // Test include and exclude together
         let filtered = config.filter_repositories(
-            &["web".to_string(), "api".to_string()], // include web OR api
-            &["frontend".to_string()],               // but exclude frontend
+            &["backend".to_string(), "api".to_string()], // include backend AND api (only repo2 has both)
+            &["frontend".to_string()],                   // but exclude frontend
             None,
         );
         assert_eq!(filtered.len(), 1);
-        assert_eq!(filtered[0].name, "repo2"); // repo2 has api but not frontend
+        assert_eq!(filtered[0].name, "repo2"); // repo2 has backend AND api, not frontend
     }
 }
