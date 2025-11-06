@@ -72,9 +72,9 @@ pub fn filter_repositories(
     base_repos
         .into_iter()
         .filter(|repo| {
-            // Check inclusion filter: if include_tags is empty, include all; otherwise check if repo has any included tag
+            // Check inclusion filter: if include_tags is empty, include all; otherwise check if repo has all included tags (AND logic)
             let included =
-                include_tags.is_empty() || include_tags.iter().any(|tag| repo.has_tag(tag));
+                include_tags.is_empty() || include_tags.iter().all(|tag| repo.has_tag(tag));
 
             // Check exclusion filter: if exclude_tags is empty, exclude none; otherwise check if repo has any excluded tag
             let excluded =
@@ -212,12 +212,12 @@ mod tests {
         // Test include and exclude together
         let filtered = filter_repositories(
             &repos,
-            &["web".to_string(), "api".to_string()], // include web OR api
-            &["frontend".to_string()],               // but exclude frontend
+            &["web".to_string(), "frontend".to_string()], // include web AND frontend (only repo1 has both)
+            &["backend".to_string()],                     // but exclude backend
             None,
         );
         assert_eq!(filtered.len(), 1);
-        assert_eq!(filtered[0].name, "repo2"); // repo2 has api but not frontend
+        assert_eq!(filtered[0].name, "repo1"); // repo1 has web AND frontend, not backend
     }
 
     #[test]
@@ -236,5 +236,33 @@ mod tests {
         let filtered = filter_by_all_tags(&repos, &["frontend".to_string()]);
         assert_eq!(filtered.len(), 1);
         assert_eq!(filtered[0].name, "repo1");
+    }
+
+    #[test]
+    fn test_filter_repositories_and_logic_with_multiple_tags() {
+        let repos = create_test_repositories();
+
+        // Multiple tags should use AND logic - all tags must be present
+        let filtered = filter_repositories(
+            &repos,
+            &["frontend".to_string(), "web".to_string()], // both tags required
+            &[],
+            None,
+        );
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].name, "repo1"); // Only repo1 has both tags
+
+        // If one tag doesn't exist, no repos should match
+        let filtered = filter_repositories(
+            &repos,
+            &["frontend".to_string(), "nonexistent".to_string()],
+            &[],
+            None,
+        );
+        assert_eq!(filtered.len(), 0);
+
+        // Single nonexistent tag should return no repos
+        let filtered = filter_repositories(&repos, &["nonexistent".to_string()], &[], None);
+        assert_eq!(filtered.len(), 0);
     }
 }
