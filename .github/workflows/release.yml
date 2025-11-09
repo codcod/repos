@@ -1,16 +1,15 @@
 name: Release
-run-name: Release workflow (${{ github.ref_name }})
 
 on:
-  push:
+  # Trigger when a release branch is created (e.g., release/v0.1.0)
+  create:
     branches:
       - 'release/**'
-      - 'chore/version-bump-*'
+  # Allow manual triggering
   workflow_dispatch:
 
 permissions:
   contents: write
-  packages: write
   pull-requests: write
 
 env:
@@ -18,42 +17,12 @@ env:
   RUST_BACKTRACE: 1
 
 jobs:
-  semantic-version:
-    name: Compute Version
-    runs-on: ubuntu-latest
-    outputs:
-      version: ${{ steps.semver.outputs.version }}
-      version_tag: ${{ steps.semver.outputs.version_tag }}
-      changed: ${{ steps.semver.outputs.changed }}
-      changelog: ${{ steps.semver.outputs.changelog }}
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-      - id: semver
-        uses: PaulHatch/semantic-version@v5.4.0
-        with:
-          tag_prefix: "v"
-          major_pattern: "BREAKING CHANGE:"
-          minor_pattern: "feat:"
-          bump_each_commit: false
-          search_commit_body: true
-          user_format_type: "csv"
-          enable_prerelease_mode: true
-      - name: Fail if no semantic changes
-        if: steps.semver.outputs.changed != 'true'
-        run: |
-          echo "No semantic changes since last tag. Skipping release."
-          exit 1
-
+  # 1. First, run tests and linting as a quality gate.
   test:
     name: Test & Lint
     runs-on: ubuntu-latest
-    needs: semantic-version
     steps:
       - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
 
@@ -61,297 +30,228 @@ jobs:
         run: cargo fmt --all -- --check
       - name: Clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
-      - name: Tests
+      - name: Run tests
         run: cargo test --all --locked
 
-  update-version:
-    name: Sync Cargo Version
-    runs-on: ubuntu-latest
-    needs: [semantic-version, test]
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-      - name: Update Cargo.toml
-        run: |
-          sed -i.bak 's/^version = ".*"/version = "${{ needs.semantic-version.outputs.version }}"/' Cargo.toml && rm Cargo.toml.bak
-          git config user.email "action@github.com"
-          git config user.name "GitHub Action"
-          git add Cargo.toml
-          git commit -m "chore: sync version ${{ needs.semantic-version.outputs.version }}" || echo "No change"
-          git push || true
-
-  create-release:
-    name: Create GitHub Release
-    runs-on: ubuntu-latest
-    needs: [semantic-version, test, update-version]
-    outputs:
-      upload_url: ${{ steps.rel.outputs.upload_url }}
-    steps:
-      - uses: actions/checkout@v5
-      - name: Configure git
-        run: |
-          git config user.email "action@github.com"
-          git config user.name "GitHub Action"
-      - name: Get previous tag
-        id: previous-tag
-        run: |
-          git fetch --tags
-          PREVIOUS_TAG=$(git tag --sort=-version:refname | head -2 | tail -1)
-          echo "tag=${PREVIOUS_TAG:-$(git rev-list --max-parents=0 HEAD)}" >> $GITHUB_OUTPUT
-      - name: Create tag
-        run: |
-          git fetch --tags
-          if git rev-parse "v${{ needs.semantic-version.outputs.version }}" >/dev/null 2>&1; then
-            echo "Tag already exists. Skipping."
-          else
-            git tag -a "v${{ needs.semantic-version.outputs.version }}" -m "Release ${{ needs.semantic-version.outputs.version }}"
-            git push origin "v${{ needs.semantic-version.outputs.version }}"
-          fi
-      - name: Create Release
-        id: rel
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ needs.semantic-version.outputs.version_tag }}
-          name: Release ${{ needs.semantic-version.outputs.version }}
-          generate_release_notes: true
-          body: |
-            ## What's Changed
-
-            ${{ needs.semantic-version.outputs.changelog }}
-
-            **Full Changelog**: https://github.com/${{ github.repository }}/compare/${{ steps.previous-tag.outputs.tag }}...v${{ needs.semantic-version.outputs.version }}
-
-  build-matrix:
-    name: Build Targets
-    needs: [semantic-version, update-version]
+  # 2. Build all required binaries for different targets.
+  #    This job runs only after tests have passed.
+  build:
+    name: Build Binaries
+    needs: test
     runs-on: ${{ matrix.os }}
-    # Don't run builds for version bump branches
-    if: "!startsWith(github.ref_name, 'chore/version-bump-')"
     strategy:
       matrix:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
+            asset_name_suffix: linux-x86_64
           - os: macos-latest
             target: x86_64-apple-darwin
+            asset_name_suffix: macos-x86_64
           - os: macos-latest
             target: aarch64-apple-darwin
+            asset_name_suffix: macos-arm64
     steps:
       - uses: actions/checkout@v5
-        with:
-          ref: ${{ github.ref_name }}
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
       - uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.target }}
-      - name: Build
-        run: cargo build --release --target ${{ matrix.target }}
-      - name: Build plugins
-        run: cargo build --release --target ${{ matrix.target }} -p repos-health
-      - name: Strip (Linux)
-        if: startsWith(matrix.target, 'x86_64-unknown-linux')
-        run: |
-          strip target/${{ matrix.target }}/release/repos
-          strip target/${{ matrix.target }}/release/repos-health
-      - name: Strip (macOS)
-        if: contains(matrix.target, 'apple-darwin')
-        run: |
-          strip -x target/${{ matrix.target }}/release/repos || true
-          strip -x target/${{ matrix.target }}/release/repos-health || true
-      - name: Package
-        run: |
-          staging="repos-${{ needs.semantic-version.outputs.version }}-${{ matrix.target }}"
-          mkdir "$staging"
-          cp target/${{ matrix.target }}/release/repos "$staging/"
-          tar czf "$staging.tar.gz" "$staging"
-          echo "ASSET=$staging.tar.gz" >> $GITHUB_ENV
 
-          plugin_staging="repos-health-${{ needs.semantic-version.outputs.version }}-${{ matrix.target }}"
-          mkdir "$plugin_staging"
-          cp target/${{ matrix.target }}/release/repos-health "$plugin_staging/"
-          tar czf "$plugin_staging.tar.gz" "$plugin_staging"
-          echo "PLUGIN_ASSET=$plugin_staging.tar.gz" >> $GITHUB_ENV
-      - name: Upload Asset
-        uses: softprops/action-gh-release@v2
+      - name: Build main binary and plugins
+        run: cargo build --release --target ${{ matrix.target }} --workspace
+
+      - name: Strip binaries for size
+        run: |
+          if [[ "${{ runner.os }}" == "Linux" ]]; then
+            strip target/${{ matrix.target }}/release/repos
+            strip target/${{ matrix.target }}/release/repos-health
+          else
+            strip -x target/${{ matrix.target }}/release/repos
+            strip -x target/${{ matrix.target }}/release/repos-health
+          fi
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
         with:
-          tag_name: ${{ needs.semantic-version.outputs.version_tag }}
-          files: |
-            ${{ env.ASSET }}
-            ${{ env.PLUGIN_ASSET }}
+          name: build-artifacts-${{ matrix.asset_name_suffix }}
+          path: |
+            target/${{ matrix.target }}/release/repos
+            target/${{ matrix.target }}/release/repos-health
 
-  build-universal-macos:
-    name: Universal macOS
+  # 3. Create the universal macOS binary from the previously built artifacts.
+  #    This job is very fast as it does not re-compile anything.
+  package-universal:
+    name: Package Universal macOS
+    needs: build
     runs-on: macos-latest
-    needs: [semantic-version, update-version, build-matrix, create-release]
-    # Don't run builds for version bump branches
-    if: "!startsWith(github.ref_name, 'chore/version-bump-')"
     steps:
-      - uses: actions/checkout@v5
+      - name: Download macOS arm64 artifacts
+        uses: actions/download-artifact@v4
         with:
-          ref: ${{ github.ref_name }}
-      - uses: dtolnay/rust-toolchain@stable
+          name: build-artifacts-macos-arm64
+          path: arm64
+      - name: Download macOS x86_64 artifacts
+        uses: actions/download-artifact@v4
         with:
-          targets: x86_64-apple-darwin,aarch64-apple-darwin
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo build --release --target x86_64-apple-darwin
-      - run: cargo build --release --target aarch64-apple-darwin
-      - run: cargo build --release --target x86_64-apple-darwin -p repos-health
-      - run: cargo build --release --target aarch64-apple-darwin -p repos-health
-      - run: |
-          lipo -create \
-            target/x86_64-apple-darwin/release/repos \
-            target/aarch64-apple-darwin/release/repos \
-            -output repos
-          strip -x repos || true
-          staging="repos-${{ needs.semantic-version.outputs.version }}-universal-apple-darwin"
-          mkdir "$staging"
-          mv repos "$staging/"
-          tar czf "$staging.tar.gz" "$staging"
-          echo "UNIVERSAL=$staging.tar.gz" >> $GITHUB_ENV
+          name: build-artifacts-macos-x86_64
+          path: x86_64
 
-          lipo -create \
-            target/x86_64-apple-darwin/release/repos-health \
-            target/aarch64-apple-darwin/release/repos-health \
-            -output repos-health
-          strip -x repos-health || true
-          plugin_staging="repos-health-${{ needs.semantic-version.outputs.version }}-universal-apple-darwin"
-          mkdir "$plugin_staging"
-          mv repos-health "$plugin_staging/"
-          tar czf "$plugin_staging.tar.gz" "$plugin_staging"
-          echo "UNIVERSAL_PLUGIN=$plugin_staging.tar.gz" >> $GITHUB_ENV
-      - uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ needs.semantic-version.outputs.version_tag }}
-          files: |
-            ${{ env.UNIVERSAL }}
-            ${{ env.UNIVERSAL_PLUGIN }}
+      - name: Create universal binaries
+        run: |
+          lipo -create -output repos arm64/repos x86_64/repos
+          lipo -create -output repos-health arm64/repos-health x86_64/repos-health
+          strip -x repos repos-health
 
-  sync-main:
-    name: Sync version back to main
+      - name: Upload universal artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts-macos-universal
+          path: |
+            repos
+            repos-health
+
+  # 4. Determine version, create the GitHub Release, and upload all artifacts.
+  #    This is the final publishing step.
+  publish:
+    name: Publish Release
+    needs: [build, package-universal]
     runs-on: ubuntu-latest
-    needs: [semantic-version, create-release]
-    permissions:
-      contents: write
-      pull-requests: write
+    outputs:
+      version: ${{ steps.set-version.outputs.version }}
     steps:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Determine Version
+        id: semver
+        uses: PaulHatch/semantic-version@v5.4.0
+        with:
+          tag_prefix: "v"
+          major_pattern: "BREAKING CHANGE:"
+          minor_pattern: "feat:"
+          search_commit_body: true
+          short_tags: false
+
+      - name: Set VERSION (fallback to branch name)
+        id: set-version
+        run: |
+          # Prefer semantic-version output
+          if [ -n "${{ steps.semver.outputs.version }}" ]; then
+            VERSION="${{ steps.semver.outputs.version }}"
+            echo "Using semantic version: $VERSION"
+          else
+            # Fallback: parse from branch name (release/v0.1.0 or release/0.1.0)
+            BRANCH_NAME="${GITHUB_REF_NAME}"
+            if [[ "$BRANCH_NAME" =~ ^release/v?([0-9]+\.[0-9]+\.[0-9]+) ]]; then
+              VERSION="${BASH_REMATCH[1]}"
+              echo "Using version from branch name: $VERSION"
+            else
+              echo "ERROR: Cannot determine version from semver or branch name: $BRANCH_NAME"
+              exit 1
+            fi
+          fi
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Package artifacts for release
+        id: package
+        run: |
+          VERSION=${{ env.VERSION }}
+          # Package individual artifacts
+          for dir in dist/build-artifacts-*; do
+            suffix=$(basename "$dir" | sed 's/build-artifacts-//')
+            tar -czf "repos-${VERSION}-${suffix}.tar.gz" -C "$dir" repos
+            tar -czf "repos-health-${VERSION}-${suffix}.tar.gz" -C "$dir" repos-health
+          done
+          # Package universal artifact
+          tar -czf "repos-${VERSION}-macos-universal.tar.gz" -C "dist/build-artifacts-macos-universal" repos
+          tar -czf "repos-health-${VERSION}-macos-universal.tar.gz" -C "dist/build-artifacts-macos-universal" repos-health
+          # List final assets
+          ls -l *.tar.gz
+          echo "ASSETS=$(ls *.tar.gz | tr '\n' ' ')" >> $GITHUB_ENV
+
+      - name: Create GitHub Release and Upload Assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ env.VERSION }}
+          name: Release v${{ env.VERSION }}
+          generate_release_notes: true
+          files: ${{ env.ASSETS }}
+
+  # 5. After a successful release, create a PR to merge the release branch
+  #    back into main and bump the version for the next development cycle.
+  sync-main:
+    name: Sync Back to Main
+    needs: publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.PAT_TOKEN }} # Use PAT for creating PR
 
       - name: Configure Git
         run: |
           git config user.name "GitHub Action"
           git config user.email "action@github.com"
 
-      - name: Fast-forward main
-        id: ff-main
+      - name: Create version bump branch from main
+        id: versioning
         run: |
-          RELEASE_BRANCH="${GITHUB_REF_NAME}"
+          RELEASE_VERSION=${{ needs.publish.outputs.version }}
+          # Calculate next version (e.g., 0.1.0 -> 0.2.0-rc)
+          MAJOR=$(echo "$RELEASE_VERSION" | cut -d. -f1)
+          MINOR=$(echo "$RELEASE_VERSION" | cut -d. -f2)
+          NEXT_MINOR=$((MINOR + 1))
+          NEXT_VERSION="${MAJOR}.${NEXT_MINOR}.0-rc"
+          echo "NEXT_VERSION=${NEXT_VERSION}" >> $GITHUB_ENV
+
+          BUMP_BRANCH="chore/version-bump-${NEXT_VERSION}"
+          echo "BUMP_BRANCH=${BUMP_BRANCH}" >> $GITHUB_ENV
+
+          # Create the new branch from the main branch
           git fetch origin main
-          git fetch origin "$RELEASE_BRANCH"
-          git checkout main
-          if git merge --ff-only "origin/$RELEASE_BRANCH"; then
-            echo "FAST_FORWARD=1" >> $GITHUB_ENV
-            echo "fast_forward=true" >> $GITHUB_OUTPUT
-          else
-            echo "FAST_FORWARD=0" >> $GITHUB_ENV
-            echo "fast_forward=false" >> $GITHUB_OUTPUT
-          fi
+          git checkout -b "$BUMP_BRANCH" origin/main
 
-      - name: Update version for next release
-        if: steps.ff-main.outputs.fast_forward == 'true'
+      - name: Update Cargo.toml and push branch
         run: |
-          # Extract current version from Cargo.toml
-          CURRENT_VERSION=$(grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
-          echo "Current version: $CURRENT_VERSION"
+          # Update version in Cargo.toml
+          sed -i "s/^version = \".*\"/version = \"${{ env.NEXT_VERSION }}\"/" Cargo.toml
 
-          # Parse semantic version components
-          if [[ $CURRENT_VERSION =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)(-.*)?$ ]]; then
-            MAJOR="${BASH_REMATCH[1]}"
-            MINOR="${BASH_REMATCH[2]}"
-            PATCH="${BASH_REMATCH[3]}"
-            PRERELEASE="${BASH_REMATCH[4]}"
-
-            # Determine next version based on release type
-            # If this was a minor version bump (e.g., 0.0.10 -> 0.1.0),
-            # set next as 0.2.0-rc for the next feature
-            if [[ $PATCH -eq 0 && -z $PRERELEASE ]]; then
-              # Clean release, bump minor and add -rc
-              NEXT_MINOR=$((MINOR + 1))
-              NEXT_VERSION="${MAJOR}.${NEXT_MINOR}.0-rc"
-            elif [[ -n $PRERELEASE ]]; then
-              # Already a prerelease, keep it or update
-              NEXT_VERSION="$CURRENT_VERSION"
-            else
-              # Patch release, prepare next minor with -rc
-              NEXT_MINOR=$((MINOR + 1))
-              NEXT_VERSION="${MAJOR}.${NEXT_MINOR}.0-rc"
-            fi
-
-            echo "Next version: $NEXT_VERSION"
-
-            # Update Cargo.toml with next version
-            sed -i.bak "s/^version = \".*\"/version = \"$NEXT_VERSION\"/" Cargo.toml && rm Cargo.toml.bak
-
-            # Check if there are actual changes
-            if git diff --quiet Cargo.toml; then
-              echo "No version changes needed"
-              echo "VERSION_UPDATED=false" >> $GITHUB_ENV
-            else
-              echo "Version updated to $NEXT_VERSION"
-              echo "VERSION_UPDATED=true" >> $GITHUB_ENV
-              echo "NEXT_VERSION=$NEXT_VERSION" >> $GITHUB_ENV
-            fi
-          else
-            echo "Failed to parse version: $CURRENT_VERSION"
-            exit 1
-          fi
-
-      - name: Commit version update (create branch, not main)
-        if: env.VERSION_UPDATED == 'true' && steps.ff-main.outputs.fast_forward == 'true'
-        run: |
-          BRANCH="chore/version-bump-${{ env.NEXT_VERSION }}"
-
-          # Delete remote branch if it exists
-          git push origin --delete "$BRANCH" 2>/dev/null || true
-
-          # Delete local branch if it exists
-          git branch -D "$BRANCH" 2>/dev/null || true
-
-          git checkout -b "$BRANCH"
+          # Commit changes
           git add Cargo.toml
-          git commit -m "chore: bump version to ${{ env.NEXT_VERSION }}"
-          git push origin "$BRANCH"
-          echo "BUMP_BRANCH=$BRANCH" >> $GITHUB_ENV
-          echo "Version bump branch $BRANCH created and pushed"
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "chore: bump version to ${{ env.NEXT_VERSION }}"
+          fi
 
-      - name: Create PR for version bump
-        if: env.VERSION_UPDATED == 'true' && steps.ff-main.outputs.fast_forward == 'true'
+          # Delete remote branch if exists, then force push
+          git push origin --delete "${{ env.BUMP_BRANCH }}" 2>/dev/null || true
+          git push origin "${{ env.BUMP_BRANCH }}"
+
+      - name: Create Pull Request
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
           # Check if PR already exists
-          EXISTING_PR=$(curl -s -H "Authorization: token ${{ secrets.PAT_TOKEN }}" \
-            "https://api.github.com/repos/${{ github.repository }}/pulls?head=${{ github.repository_owner }}:${{ env.BUMP_BRANCH }}&base=main" \
-            | jq -r '.[0].number // empty')
+          EXISTING_PR=$(gh pr list --head "${{ env.BUMP_BRANCH }}" --base main --json number --jq '.[0].number' 2>/dev/null || echo "")
 
           if [ -n "$EXISTING_PR" ]; then
             echo "PR #$EXISTING_PR already exists, skipping creation"
           else
-            curl -X POST \
-              -H "Authorization: token ${{ secrets.PAT_TOKEN }}" \
-              -H "Accept: application/vnd.github.v3+json" \
-              "https://api.github.com/repos/${{ github.repository }}/pulls" \
-              -d "{\"title\":\"chore: bump version to ${{ env.NEXT_VERSION }}\",\"head\":\"${{ env.BUMP_BRANCH }}\",\"base\":\"main\",\"body\":\"Automatic version bump after release. Prepare ${{ env.NEXT_VERSION }} as next release candidate.\"}"
+            gh pr create \
+              --base main \
+              --head "${{ env.BUMP_BRANCH }}" \
+              --title "chore: Post-release version bump to ${{ env.NEXT_VERSION }}" \
+              --body "This PR merges the changes from release \`${{ github.ref_name }}\` back into main and prepares for the next development cycle by bumping the version to \`${{ env.NEXT_VERSION }}\`."
           fi
-
-      - name: Create PR (non fast-forward)
-        if: steps.ff-main.outputs.fast_forward == 'false'
-        run: |
-          curl -X POST \
-            -H "Authorization: token ${{ secrets.PAT_TOKEN }}" \
-            -H "Accept: application/vnd.github.v3+json" \
-            "https://api.github.com/repos/${{ github.repository }}/pulls" \
-            -d "{\"title\":\"chore: sync version ${{ needs.semantic-version.outputs.version }}\",\"head\":\"${GITHUB_REF_NAME}\",\"base\":\"main\",\"body\":\"Automatic version sync after release v${{ needs.semantic-version.outputs.version }}.\"}"
