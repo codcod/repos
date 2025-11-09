@@ -4,9 +4,26 @@ use super::{Command, CommandContext};
 use anyhow::Result;
 use async_trait::async_trait;
 use colored::*;
+use serde::Serialize;
+
+/// Output format for a repository in JSON mode
+#[derive(Serialize)]
+struct RepositoryOutput {
+    name: String,
+    url: String,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    tags: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    branch: Option<String>,
+}
 
 /// List command for displaying repositories with optional filtering
-pub struct ListCommand;
+pub struct ListCommand {
+    /// Output in JSON format
+    pub json: bool,
+}
 
 #[async_trait]
 impl Command for ListCommand {
@@ -17,6 +34,24 @@ impl Command for ListCommand {
             context.repos.as_deref(),
         );
 
+        if self.json {
+            // JSON output mode
+            let output: Vec<RepositoryOutput> = repositories
+                .iter()
+                .map(|repo| RepositoryOutput {
+                    name: repo.name.clone(),
+                    url: repo.url.clone(),
+                    tags: repo.tags.clone(),
+                    path: repo.path.clone(),
+                    branch: repo.branch.clone(),
+                })
+                .collect();
+
+            println!("{}", serde_json::to_string_pretty(&output)?);
+            return Ok(());
+        }
+
+        // Human-readable output mode
         if repositories.is_empty() {
             let mut filter_parts = Vec::new();
 
@@ -130,7 +165,7 @@ mod tests {
     #[tokio::test]
     async fn test_list_command_all_repositories() {
         let config = create_test_config();
-        let command = ListCommand;
+        let command = ListCommand { json: false };
 
         let context = create_context(config, vec![], vec![], None);
 
@@ -141,7 +176,7 @@ mod tests {
     #[tokio::test]
     async fn test_list_command_with_tag_filter() {
         let config = create_test_config();
-        let command = ListCommand;
+        let command = ListCommand { json: false };
 
         let context = create_context(config, vec!["frontend".to_string()], vec![], None);
 
@@ -152,7 +187,7 @@ mod tests {
     #[tokio::test]
     async fn test_list_command_with_exclude_tag() {
         let config = create_test_config();
-        let command = ListCommand;
+        let command = ListCommand { json: false };
 
         let context = create_context(config, vec![], vec!["backend".to_string()], None);
 
@@ -163,7 +198,7 @@ mod tests {
     #[tokio::test]
     async fn test_list_command_with_both_filters() {
         let config = create_test_config();
-        let command = ListCommand;
+        let command = ListCommand { json: false };
 
         let context = create_context(
             config,
@@ -179,7 +214,7 @@ mod tests {
     #[tokio::test]
     async fn test_list_command_no_matches() {
         let config = create_test_config();
-        let command = ListCommand;
+        let command = ListCommand { json: false };
 
         let context = create_context(config, vec!["nonexistent".to_string()], vec![], None);
 
@@ -190,7 +225,7 @@ mod tests {
     #[tokio::test]
     async fn test_list_command_with_repo_filter() {
         let config = create_test_config();
-        let command = ListCommand;
+        let command = ListCommand { json: false };
 
         let context = create_context(
             config,
@@ -209,7 +244,7 @@ mod tests {
             repositories: vec![],
             recipes: vec![],
         };
-        let command = ListCommand;
+        let command = ListCommand { json: false };
 
         let context = create_context(config, vec![], vec![], None);
 
@@ -220,7 +255,7 @@ mod tests {
     #[tokio::test]
     async fn test_list_command_multiple_tags() {
         let config = create_test_config();
-        let command = ListCommand;
+        let command = ListCommand { json: false };
 
         let context = create_context(
             config,
@@ -236,7 +271,7 @@ mod tests {
     #[tokio::test]
     async fn test_list_command_combined_filters() {
         let config = create_test_config();
-        let command = ListCommand;
+        let command = ListCommand { json: false };
 
         let context = create_context(
             config,
@@ -244,6 +279,42 @@ mod tests {
             vec![],
             Some(vec!["test-repo-1".to_string()]),
         );
+
+        let result = command.execute(&context).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_list_command_json_output() {
+        let config = create_test_config();
+        let command = ListCommand { json: true };
+
+        let context = create_context(config, vec![], vec![], None);
+
+        let result = command.execute(&context).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_list_command_json_with_filters() {
+        let config = create_test_config();
+        let command = ListCommand { json: true };
+
+        let context = create_context(config, vec!["frontend".to_string()], vec![], None);
+
+        let result = command.execute(&context).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_list_command_json_empty() {
+        let config = Config {
+            repositories: vec![],
+            recipes: vec![],
+        };
+        let command = ListCommand { json: true };
+
+        let context = create_context(config, vec![], vec![], None);
 
         let result = command.execute(&context).await;
         assert!(result.is_ok());
