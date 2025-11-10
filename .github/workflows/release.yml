@@ -192,6 +192,13 @@ jobs:
           echo "$ASSETS" >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
 
+      - name: Create and push tag
+        run: |
+          git config user.name "GitHub Action"
+          git config user.email "action@github.com"
+          git tag -a "v${{ env.VERSION }}" -m "Release v${{ env.VERSION }}"
+          git push origin "v${{ env.VERSION }}"
+
       - name: Create GitHub Release and Upload Assets
         uses: softprops/action-gh-release@v2
         with:
