@@ -172,6 +172,10 @@ enum Commands {
         /// Exclude repositories with these tags (can be specified multiple times)
         #[arg(short = 'e', long)]
         exclude_tag: Vec<String>,
+
+        /// Output in JSON format for machine consumption
+        #[arg(long)]
+        json: bool,
     },
 
     /// Create a config.yaml file from discovered Git repositories
@@ -449,6 +453,7 @@ async fn execute_builtin_command(command: Commands) -> Result<()> {
             config,
             tag,
             exclude_tag,
+            json,
         } => {
             let config = Config::load_config(&config)?;
 
@@ -464,7 +469,7 @@ async fn execute_builtin_command(command: Commands) -> Result<()> {
                 parallel: false, // List command doesn't need parallel execution
                 repos: if repos.is_empty() { None } else { Some(repos) },
             };
-            ListCommand.execute(&context).await?;
+            ListCommand { json }.execute(&context).await?;
         }
         Commands::Init {
             output,
