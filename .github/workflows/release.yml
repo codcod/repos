@@ -1,8 +1,8 @@
 name: Release
 
 on:
-  # Trigger when a release branch is created (e.g., release/v0.1.0)
-  create:
+  # Trigger when pushing to release branches
+  push:
     branches:
       - 'release/**'
   # Allow manual triggering
