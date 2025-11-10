@@ -1,9 +1,11 @@
+use serial_test::serial;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::process::Command;
 use tempfile::TempDir;
 
 #[test]
+#[serial]
 fn test_plugin_system_integration() {
     // Create a temporary directory for our test plugin
     let temp_dir = TempDir::new().unwrap();
@@ -122,27 +124,14 @@ exit 0
 }
 
 #[test]
+#[serial]
 fn test_builtin_commands_still_work() {
     // Ensure built-in commands are not affected by plugin system
 
     // Get the current working directory to ensure we run commands from the right place
     let current_dir = std::env::current_dir().expect("Failed to get current directory");
 
-    // Build the binary first to avoid compilation races
-    let build_output = Command::new("cargo")
-        .args(["build"])
-        .current_dir(&current_dir)
-        .output()
-        .expect("Failed to build binary");
-
-    if !build_output.status.success() {
-        eprintln!("Build failed:");
-        eprintln!("stdout: {}", String::from_utf8_lossy(&build_output.stdout));
-        eprintln!("stderr: {}", String::from_utf8_lossy(&build_output.stderr));
-        panic!("Cannot run tests without successful build");
-    }
-
-    // Test help command
+    // Test help command (cargo run will build if needed)
     let output = Command::new("cargo")
         .args(["run", "--", "--help"])
         .current_dir(&current_dir)
