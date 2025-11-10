@@ -199,6 +199,7 @@ jobs:
           name: Release v${{ env.VERSION }}
           draft: false
           generate_release_notes: true
+          overwrite_files: true
           files: |
             *.tar.gz
 
