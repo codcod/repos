@@ -197,7 +197,6 @@ jobs:
         with:
           tag_name: v${{ env.VERSION }}
           name: Release v${{ env.VERSION }}
-          draft: false
           generate_release_notes: true
           overwrite_files: true
           files: |
