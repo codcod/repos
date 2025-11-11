@@ -81,6 +81,7 @@ jobs:
           path: |
             target/${{ matrix.target }}/release/repos
             target/${{ matrix.target }}/release/repos-health
+            target/${{ matrix.target }}/release/repos-validate
 
   # 3. Create the universal macOS binary from the previously built artifacts.
   #    This job is very fast as it does not re-compile anything.
@@ -104,7 +105,8 @@ jobs:
         run: |
           lipo -create -output repos arm64/repos x86_64/repos
           lipo -create -output repos-health arm64/repos-health x86_64/repos-health
-          strip -x repos repos-health
+          lipo -create -output repos-validate arm64/repos-validate x86_64/repos-validate
+          strip -x repos repos-health repos-validate
 
       - name: Upload universal artifact
         uses: actions/upload-artifact@v5
@@ -113,6 +115,7 @@ jobs:
           path: |
             repos
             repos-health
+            repos-validate
 
   # 4. Determine version, create the GitHub Release, and upload all artifacts.
   #    This is the final publishing step.
@@ -161,6 +164,7 @@ jobs:
               suffix=$(basename "$dir" | sed 's/build-artifacts-//')
               tar -czf "repos-${VERSION}-${suffix}.tar.gz" -C "$dir" repos
               tar -czf "repos-health-${VERSION}-${suffix}.tar.gz" -C "$dir" repos-health
+              tar -czf "repos-validate-${VERSION}-${suffix}.tar.gz" -C "$dir" repos-validate
             fi
           done
 
@@ -168,6 +172,7 @@ jobs:
           if [ -d "dist/build-artifacts-macos-universal" ]; then
             tar -czf "repos-${VERSION}-macos-universal.tar.gz" -C "dist/build-artifacts-macos-universal" repos
             tar -czf "repos-health-${VERSION}-macos-universal.tar.gz" -C "dist/build-artifacts-macos-universal" repos-health
+            tar -czf "repos-validate-${VERSION}-macos-universal.tar.gz" -C "dist/build-artifacts-macos-universal" repos-validate
           fi
 
           # List final assets

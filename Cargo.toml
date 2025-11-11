@@ -10,11 +10,14 @@ path = "src/lib.rs"
 [workspace]
 members = [
     ".",
+    "common/repos-github",
     "plugins/repos-health",
+    "plugins/repos-validate",
 ]
 
 [dependencies]
 async-trait = "0.1"
+repos-github = { path = "common/repos-github" }
 clap = { version = "4.4", features = ["derive"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_yaml = "0.9"

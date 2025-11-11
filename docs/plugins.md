@@ -39,6 +39,7 @@ The core CLI:
    - `REPOS_DEBUG=1` (if --debug flag was passed)
    - `REPOS_TOTAL_REPOS=28` (total repos in config)
    - `REPOS_FILTERED_COUNT=5` (repos after filtering)
+   - `REPOS_CONFIG_FILE=/path/to/your/config.yaml` (path to config file)
 6. Executes `repos-health prs` with only plugin-specific args
 
 ### Using Context Injection in Your Plugin

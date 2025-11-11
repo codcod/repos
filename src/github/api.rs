@@ -1,7 +1,6 @@
 //! GitHub API operations
 
-use super::client::GitHubClient;
-use super::types::{PrOptions, PullRequestParams};
+use super::types::PrOptions;
 use crate::config::Repository;
 use crate::constants::github::{DEFAULT_BRANCH_PREFIX, UUID_LENGTH};
 use crate::git;
@@ -72,10 +71,10 @@ async fn create_github_pr(
     branch_name: &str,
     options: &PrOptions,
 ) -> Result<String> {
-    let client = GitHubClient::new(Some(options.token.clone()));
+    let client = repos_github::GitHubClient::new(Some(options.token.clone()));
 
     // Extract owner and repo name from URL
-    let (owner, repo_name) = client.parse_github_url(&repo.url)?;
+    let (owner, repo_name) = parse_github_url(&repo.url)?;
 
     // Determine base branch - get actual default branch if not specified
     let base_branch = if let Some(ref base) = options.base_branch {
@@ -84,23 +83,34 @@ async fn create_github_pr(
         git::get_default_branch(&repo.get_target_dir())?
     };
 
-    let result = client
-        .create_pull_request(PullRequestParams::new(
-            &owner,
-            &repo_name,
-            &options.title,
-            &options.body,
-            branch_name,
-            &base_branch,
-            options.draft,
-        ))
-        .await?;
+    let params = repos_github::PullRequestParams::new(
+        &owner,
+        &repo_name,
+        &options.title,
+        branch_name,
+        &base_branch,
+        &options.body,
+        options.draft,
+    );
 
-    let pr_url = result["html_url"]
-        .as_str()
-        .ok_or_else(|| anyhow::anyhow!("No html_url in GitHub API response"))?;
+    let result = client.create_pull_request(params).await?;
 
-    Ok(pr_url.to_string())
+    Ok(result.html_url)
+}
+
+/// Parse a GitHub URL to extract owner and repository name
+fn parse_github_url(url: &str) -> Result<(String, String)> {
+    let url = url.trim_end_matches('/').trim_end_matches(".git");
+
+    let parts: Vec<&str> = url.split('/').collect();
+    if parts.len() < 2 {
+        anyhow::bail!("Invalid GitHub URL format: {url}");
+    }
+
+    let repo_name = parts[parts.len() - 1];
+    let owner = parts[parts.len() - 2];
+
+    Ok((owner.to_string(), repo_name.to_string()))
 }
 
 #[cfg(test)]

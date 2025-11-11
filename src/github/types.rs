@@ -1,44 +1,9 @@
-//! GitHub API types and data structures
+//! GitHub workflow types
+//!
+//! This module contains workflow-specific types for GitHub operations.
+//! For low-level GitHub API types, see the `repos-github` crate.
 
-use serde::{Deserialize, Serialize};
-use std::error::Error;
-use std::fmt;
-
-/// Parameters for creating a pull request
-#[derive(Debug, Clone)]
-pub struct PullRequestParams<'a> {
-    pub owner: &'a str,
-    pub repo: &'a str,
-    pub title: &'a str,
-    pub body: &'a str,
-    pub head: &'a str,
-    pub base: &'a str,
-    pub draft: bool,
-}
-
-impl<'a> PullRequestParams<'a> {
-    pub fn new(
-        owner: &'a str,
-        repo: &'a str,
-        title: &'a str,
-        body: &'a str,
-        head: &'a str,
-        base: &'a str,
-        draft: bool,
-    ) -> Self {
-        Self {
-            owner,
-            repo,
-            title,
-            body,
-            head,
-            base,
-            draft,
-        }
-    }
-}
-
-/// Pull request options for creation
+/// Pull request options for creation workflow
 #[derive(Debug, Clone)]
 pub struct PrOptions {
     pub title: String,
@@ -89,63 +54,4 @@ impl PrOptions {
         self.create_only = true;
         self
     }
-}
-
-/// GitHub API error types
-#[derive(Debug)]
-pub enum GitHubError {
-    ApiError(String),
-    AuthError,
-    NetworkError(String),
-    ParseError(String),
-}
-
-impl fmt::Display for GitHubError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            GitHubError::ApiError(msg) => write!(f, "GitHub API error: {msg}"),
-            GitHubError::AuthError => write!(f, "GitHub authentication error"),
-            GitHubError::NetworkError(msg) => write!(f, "Network error: {msg}"),
-            GitHubError::ParseError(msg) => write!(f, "Parse error: {msg}"),
-        }
-    }
-}
-
-impl Error for GitHubError {}
-
-/// GitHub repository information
-#[derive(Debug, Serialize, Deserialize)]
-pub struct GitHubRepo {
-    pub id: u64,
-    pub name: String,
-    pub full_name: String,
-    pub html_url: String,
-    pub clone_url: String,
-    pub default_branch: String,
-}
-
-/// GitHub user information
-#[derive(Debug, Serialize, Deserialize)]
-pub struct User {
-    pub id: u64,
-    pub login: String,
-    pub html_url: String,
-}
-
-/// Pull request response from GitHub API
-#[derive(Debug, Serialize, Deserialize)]
-pub struct PullRequest {
-    pub id: u64,
-    pub number: u64,
-    pub title: String,
-    pub body: Option<String>,
-    pub html_url: String,
-    pub state: String,
-    pub user: User,
-}
-
-/// Constants for GitHub API
-pub mod constants {
-    // Re-export from centralized constants
-    pub use crate::constants::github::{API_BASE as GITHUB_API_BASE, DEFAULT_USER_AGENT};
 }
