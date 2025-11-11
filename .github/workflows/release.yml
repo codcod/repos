@@ -192,18 +192,18 @@ jobs:
           echo "$ASSETS" >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
 
-      - name: Create and push tag using Git
-        env:
-          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
-        run: |
-          git config user.name "GitHub Action"
-          git config user.email "action@github.com"
+      # - name: Create and push tag using Git
+      #   env:
+      #     GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+      #   run: |
+      #     git config user.name "GitHub Action"
+      #     git config user.email "action@github.com"
 
-          # Create annotated tag
-          git tag -a "v${{ env.VERSION }}" -m "Release v${{ env.VERSION }}"
+      #     # Create annotated tag
+      #     git tag -a "v${{ env.VERSION }}" -m "Release v${{ env.VERSION }}"
 
-          # Push tag using PAT authentication
-          git push https://x-access-token:${{ secrets.PAT_TOKEN }}@github.com/${{ github.repository }}.git "v${{ env.VERSION }}"
+      #     # Push tag using PAT authentication
+      #     git push https://x-access-token:${{ secrets.PAT_TOKEN }}@github.com/${{ github.repository }}.git "v${{ env.VERSION }}"
 
       - name: Create GitHub Release and Upload Assets
         uses: softprops/action-gh-release@v2
