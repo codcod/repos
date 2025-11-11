@@ -1,6 +1,6 @@
 [package]
 name = "repos"
-version = "0.0.15-rc"
+version = "0.2.0-rc"
 edition = "2024"
 
 [lib]
