@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - '[0-9]+-*'  # Feature branches like 120-add-repos-validate-command
     paths-ignore:
       - '**.md'
       - 'docs/**'
