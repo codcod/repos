@@ -128,8 +128,12 @@ repos run --no-save "ls -la"
 
 ### Run the 'update-deps' recipe on all repositories
 
-repos run --recipe update-deps
+```bash
+repos run update-deps
+```
 
 ### Run the 'test' recipe on backend repositories in parallel
 
-repos run -t backend -p --recipe test
+```bash
+repos run -t backend -p test
+```

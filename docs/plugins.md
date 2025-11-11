@@ -13,7 +13,7 @@ The plugin system follows the same pattern as Git's external subcommands:
 
 ## Context Injection (Simplified Plugin Development)
 
-As of version 0.0.10, plugins can opt into receiving pre-processed context from the core `repos` CLI. This means plugins don't need to:
+As of version 0.2.0, plugins can opt into receiving pre-processed context from the core `repos` CLI. This means plugins don't need to:
 
 - Parse `--config`, `--tag`, `--exclude-tag`, `--debug` options themselves
 - Load and parse the YAML configuration file

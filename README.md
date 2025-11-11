@@ -203,9 +203,7 @@ Contributions are welcome! Please follow these steps:
 
 ### Documentation
 
-- [Release Guide](./docs/release.md)
-- [Semantic Versioning Guide](./docs/semantic.md)
-- [Release Strategy](./docs/release-strategy.md)
+- [Release Process](./docs/release-process.md)
 
 ## Alternatives
 
