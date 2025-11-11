@@ -1,7 +1,8 @@
 //! Pull request command implementation
 
 use super::{Command, CommandContext};
-use crate::github::{self, PrOptions};
+use crate::github::PrOptions;
+use crate::github::api::create_pr_from_workspace;
 use anyhow::Result;
 use async_trait::async_trait;
 use colored::*;
@@ -84,7 +85,7 @@ impl Command for PrCommand {
                     async move {
                         (
                             repo.name.clone(),
-                            github::create_pr_from_workspace(&repo, &pr_options).await,
+                            create_pr_from_workspace(&repo, &pr_options).await,
                         )
                     }
                 })
@@ -102,7 +103,7 @@ impl Command for PrCommand {
             }
         } else {
             for repo in repositories {
-                match github::create_pr_from_workspace(&repo, &pr_options).await {
+                match create_pr_from_workspace(&repo, &pr_options).await {
                     Ok(_) => successful += 1,
                     Err(e) => {
                         eprintln!(

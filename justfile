@@ -12,6 +12,7 @@ build:
 [group('lifecycle')]
 build-plugins:
     cargo build --release -p repos-health
+    cargo build --release -p repos-validate
 
 # Run tests
 [group('qa')]

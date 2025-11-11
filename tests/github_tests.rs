@@ -1,75 +1,9 @@
 use repos::config::repository::Repository;
 use repos::github::api::create_pr_from_workspace;
-use repos::github::auth::GitHubAuth;
-use repos::github::client::GitHubClient;
 use repos::github::types::PrOptions;
+use repos_github::GitHubClient;
 use std::fs;
 use tempfile::TempDir;
-
-// ===== GitHub Authentication Tests =====
-
-#[test]
-fn test_github_auth_new() {
-    let token = "ghp_test_token_123".to_string();
-    let auth = GitHubAuth::new(token.clone());
-    assert_eq!(auth.token(), &token);
-}
-
-#[test]
-fn test_github_auth_token() {
-    let token = "ghp_another_token_456".to_string();
-    let auth = GitHubAuth::new(token.clone());
-    assert_eq!(auth.token(), &token);
-}
-
-#[test]
-fn test_github_auth_get_auth_header() {
-    let token = "ghp_header_token_789".to_string();
-    let auth = GitHubAuth::new(token.clone());
-    let expected_header = format!("Bearer {}", token);
-    assert_eq!(auth.get_auth_header(), expected_header);
-}
-
-#[test]
-fn test_github_auth_validate_token_success() {
-    let token = "valid_token".to_string();
-    let auth = GitHubAuth::new(token);
-    let result = auth.validate_token();
-    assert!(result.is_ok());
-}
-
-#[test]
-fn test_github_auth_validate_token_empty() {
-    let auth = GitHubAuth::new(String::new());
-    let result = auth.validate_token();
-    assert!(result.is_err());
-    assert!(
-        result
-            .unwrap_err()
-            .to_string()
-            .contains("GitHub token is required")
-    );
-}
-
-#[test]
-fn test_github_auth_validate_token_whitespace() {
-    let auth = GitHubAuth::new("   ".to_string());
-    let result = auth.validate_token();
-    // Empty string after trim should still pass current validation
-    // (the validation only checks if completely empty)
-    assert!(result.is_ok());
-}
-
-#[test]
-fn test_github_auth_comprehensive() {
-    let token = "ghp_comprehensive_test_token".to_string();
-    let auth = GitHubAuth::new(token.clone());
-
-    // Test all methods work together
-    assert_eq!(auth.token(), &token);
-    assert_eq!(auth.get_auth_header(), format!("Bearer {}", token));
-    assert!(auth.validate_token().is_ok());
-}
 
 // ===== GitHub Client Tests =====
 
@@ -87,144 +21,8 @@ fn test_github_client_new_without_token() {
     // This tests the constructor
 }
 
-#[test]
-fn test_parse_github_url_ssh_github_com() {
-    let client = GitHubClient::new(None);
-    let result = client.parse_github_url("git@github.com:owner/repo");
-    assert!(result.is_ok());
-    let (owner, repo) = result.unwrap();
-    assert_eq!(owner, "owner");
-    assert_eq!(repo, "repo");
-}
-
-#[test]
-fn test_parse_github_url_ssh_enterprise() {
-    let client = GitHubClient::new(None);
-    let result = client.parse_github_url("git@github-enterprise:owner/repo");
-    assert!(result.is_ok());
-    let (owner, repo) = result.unwrap();
-    assert_eq!(owner, "owner");
-    assert_eq!(repo, "repo");
-}
-
-#[test]
-fn test_parse_github_url_https_github_com() {
-    let client = GitHubClient::new(None);
-    let result = client.parse_github_url("https://github.com/owner/repo");
-    assert!(result.is_ok());
-    let (owner, repo) = result.unwrap();
-    assert_eq!(owner, "owner");
-    assert_eq!(repo, "repo");
-}
-
-#[test]
-fn test_parse_github_url_https_enterprise() {
-    let client = GitHubClient::new(None);
-    let result = client.parse_github_url("https://github-enterprise/owner/repo");
-    assert!(result.is_ok());
-    let (owner, repo) = result.unwrap();
-    assert_eq!(owner, "owner");
-    assert_eq!(repo, "repo");
-}
-
-#[test]
-fn test_parse_github_url_legacy_format() {
-    let client = GitHubClient::new(None);
-    let result = client.parse_github_url("github.com:owner/repo");
-    assert!(result.is_ok());
-    let (owner, repo) = result.unwrap();
-    assert_eq!(owner, "owner");
-    assert_eq!(repo, "repo");
-}
-
-#[test]
-fn test_parse_github_url_with_git_suffix() {
-    let client = GitHubClient::new(None);
-    let result = client.parse_github_url("git@github.com:owner/repo.git");
-    assert!(result.is_ok());
-    let (owner, repo) = result.unwrap();
-    assert_eq!(owner, "owner");
-    assert_eq!(repo, "repo");
-}
-
-#[test]
-fn test_parse_github_url_with_trailing_slash() {
-    let client = GitHubClient::new(None);
-    let result = client.parse_github_url("https://github.com/owner/repo/");
-    assert!(result.is_ok());
-    let (owner, repo) = result.unwrap();
-    assert_eq!(owner, "owner");
-    assert_eq!(repo, "repo");
-}
-
-#[test]
-fn test_parse_github_url_invalid_format() {
-    let client = GitHubClient::new(None);
-    let result = client.parse_github_url("invalid-url-format");
-    assert!(result.is_err());
-}
-
-#[test]
-fn test_parse_github_url_empty_string() {
-    let client = GitHubClient::new(None);
-    let result = client.parse_github_url("");
-    assert!(result.is_err());
-}
-
-#[test]
-fn test_parse_github_url_only_domain() {
-    let client = GitHubClient::new(None);
-    let result = client.parse_github_url("https://github.com");
-    assert!(result.is_err());
-}
-
-#[test]
-fn test_parse_github_url_missing_repo() {
-    let client = GitHubClient::new(None);
-    let result = client.parse_github_url("https://github.com/owner");
-    assert!(result.is_err());
-}
-
-#[test]
-fn test_parse_github_url_complex_repo_name() {
-    let client = GitHubClient::new(None);
-    let result = client.parse_github_url("git@github.com:owner/repo-with-dashes");
-    assert!(result.is_ok());
-    let (owner, repo) = result.unwrap();
-    assert_eq!(owner, "owner");
-    assert_eq!(repo, "repo-with-dashes");
-}
-
-#[test]
-fn test_parse_github_url_numbers_in_names() {
-    let client = GitHubClient::new(None);
-    let result = client.parse_github_url("https://github.com/owner123/repo456");
-    assert!(result.is_ok());
-    let (owner, repo) = result.unwrap();
-    assert_eq!(owner, "owner123");
-    assert_eq!(repo, "repo456");
-}
-
-#[test]
-fn test_github_client_comprehensive() {
-    // Test that all methods work together
-    let client = GitHubClient::new(Some("test_token".to_string()));
-
-    // Test various URL formats
-    let urls = vec![
-        "git@github.com:owner/repo",
-        "https://github.com/owner/repo.git",
-        "github.com/owner/repo",
-    ];
-
-    for url in urls {
-        let result = client.parse_github_url(url);
-        assert!(result.is_ok());
-        let (owner, repo) = result.unwrap();
-        assert_eq!(owner, "owner");
-        assert_eq!(repo, "repo");
-    }
-}
+// Note: parse_github_url is now an internal function in api.rs
+// URL parsing is tested indirectly through the PR workflow tests
 
 // ===== GitHub API Integration Tests =====
 
@@ -572,23 +370,9 @@ async fn test_create_pr_workspace_custom_branch_and_commit() {
 
 #[tokio::test]
 async fn test_github_integration_auth_client_api() {
-    // Test complete integration flow with authentication, client, and API
+    // Test complete integration flow with client and API
     let token = "ghp_integration_test_token".to_string();
-    let auth = GitHubAuth::new(token.clone());
-
-    // Validate auth
-    assert!(auth.validate_token().is_ok());
-    assert_eq!(auth.get_auth_header(), format!("Bearer {}", token));
-
-    // Test client with auth
-    let client = GitHubClient::new(Some(token));
-
-    // Test URL parsing
-    let result = client.parse_github_url("git@github.com:owner/repo");
-    assert!(result.is_ok());
-    let (owner, repo) = result.unwrap();
-    assert_eq!(owner, "owner");
-    assert_eq!(repo, "repo");
+    let _client = GitHubClient::new(Some(token.clone()));
 
     // Setup git repo for API testing
     let temp_dir = TempDir::new().unwrap();
@@ -625,7 +409,7 @@ async fn test_github_integration_auth_client_api() {
     let options = PrOptions::new(
         "Integration Test PR".to_string(),
         "This PR tests the integration flow".to_string(),
-        "ghp_integration_test_token".to_string(),
+        token,
     )
     .create_only();
 

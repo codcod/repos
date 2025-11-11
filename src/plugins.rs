@@ -19,6 +19,8 @@ pub struct PluginContext {
     pub args: Vec<String>,
     /// Debug mode flag
     pub debug: bool,
+    /// Path to the config file
+    pub config_path: Option<String>,
 }
 
 impl PluginContext {
@@ -34,6 +36,24 @@ impl PluginContext {
             repositories,
             args,
             debug,
+            config_path: None,
+        }
+    }
+
+    /// Create a new plugin context with config path
+    pub fn with_config_path(
+        config: Config,
+        repositories: Vec<Repository>,
+        args: Vec<String>,
+        debug: bool,
+        config_path: String,
+    ) -> Self {
+        Self {
+            config,
+            repositories,
+            args,
+            debug,
+            config_path: Some(config_path),
         }
     }
 }
@@ -64,6 +84,11 @@ pub fn try_external_plugin(plugin_name: &str, context: &PluginContext) -> Result
             "REPOS_FILTERED_COUNT",
             context.repositories.len().to_string(),
         );
+
+    // Set config file path if available
+    if let Some(config_path) = &context.config_path {
+        cmd.env("REPOS_CONFIG_FILE", config_path);
+    }
 
     let status = cmd.status().map_err(|e| {
         anyhow::anyhow!(

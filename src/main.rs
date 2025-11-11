@@ -293,7 +293,17 @@ async fn main() -> Result<()> {
             };
 
             // Build plugin context
-            let context = plugins::PluginContext::new(config, filtered_repos, plugin_args, debug);
+            let context = if needs_config {
+                plugins::PluginContext::with_config_path(
+                    config,
+                    filtered_repos,
+                    plugin_args,
+                    debug,
+                    config_path,
+                )
+            } else {
+                plugins::PluginContext::new(config, filtered_repos, plugin_args, debug)
+            };
 
             plugins::try_external_plugin(plugin_name, &context)?;
         }

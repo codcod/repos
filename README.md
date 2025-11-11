@@ -107,6 +107,7 @@ overview. Click on a command to see its detailed documentation.
 | [**`pr`**](./docs/commands/pr.md) | Creates pull requests for repositories with changes. |
 | [**`rm`**](./docs/commands/rm.md) | Removes cloned repositories from your local disk. |
 | [**`init`**](./docs/commands/init.md) | Generates a `config.yaml` file from local Git repositories. |
+| [**`validate`**](./plugins/repos-validate/README.md) | Validates config file and repository connectivity (via plugin). |
 
 For a full list of options for any command, run `repos <COMMAND> --help`.
 
