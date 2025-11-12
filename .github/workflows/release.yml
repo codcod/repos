@@ -137,7 +137,9 @@ jobs:
           tag_prefix: "v"
           major_pattern: "BREAKING CHANGE:"
           minor_pattern: "feat:"
+          version_format: "${major}.${minor}.${patch}"
           search_commit_body: true
+          debug: true
 
       - name: Set VERSION from semantic-version
         id: set-version
