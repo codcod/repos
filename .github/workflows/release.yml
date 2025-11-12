@@ -138,7 +138,6 @@ jobs:
           major_pattern: "BREAKING CHANGE:"
           minor_pattern: "feat:"
           search_commit_body: true
-          short_tags: false
 
       - name: Set VERSION from semantic-version
         id: set-version
