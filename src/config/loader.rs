@@ -44,34 +44,7 @@ impl Config {
 
     /// Save configuration to a file
     pub fn save(&self, path: &str) -> Result<()> {
-        // Use standard serde_yaml serialization
-        let yaml = serde_yaml::to_string(self)?;
-
-        // Minimal fix for yamllint: indent array items under 'repositories:' and 'recipes:'
-        // This is the only formatting adjustment needed for yamllint compliance
-        let fixed_yaml = yaml
-            .lines()
-            .map(|line| {
-                // If line starts with "- " and previous non-empty line ends with ":"
-                // then it's an array item that needs indenting
-                if line.starts_with("- ") {
-                    format!("  {}", line)
-                } else if line.starts_with(" ") && !line.starts_with("   ") {
-                    // Lines with 1-2 spaces are properties of array items, need to be 4 spaces
-                    format!("  {}", line)
-                } else {
-                    line.to_string()
-                }
-            })
-            .collect::<Vec<_>>()
-            .join("\n");
-
-        // Add document marker for yamllint compliance
-        let yaml_content = format!("---\n{}\n", fixed_yaml);
-
-        std::fs::write(path, yaml_content)?;
-
-        Ok(())
+        save_config(self, path)
     }
 
     /// Filter repositories by specific names
@@ -183,6 +156,92 @@ impl Default for Config {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// Save a config to a file with proper YAML formatting and comment preservation
+///
+/// This is the centralized function for writing config.yaml files. It ensures:
+/// - Leading comments are preserved
+/// - YAML document start marker (---) is added after comments
+/// - Proper indentation for yamllint compliance
+/// - Trailing newline
+///
+/// Use this function or Config::save() for all config file writes to ensure consistency.
+pub fn save_config<T: Serialize>(config: &T, path: &str) -> Result<()> {
+    // Read existing file to preserve leading comments
+    let existing_comments = if Path::new(path).exists() {
+        extract_leading_comments(path)?
+    } else {
+        Vec::new()
+    };
+
+    // Serialize config to YAML
+    let yaml = serde_yaml::to_string(config)?;
+
+    // Apply minimal indentation fix for yamllint compliance
+    let fixed_yaml = yaml
+        .lines()
+        .map(|line| {
+            if line.starts_with("- ") || (line.starts_with(" ") && !line.starts_with("   ")) {
+                format!("  {}", line)
+            } else {
+                line.to_string()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    // Combine comments, document marker, and content
+    let yaml_content = add_document_start_preserving_comments(&existing_comments, &fixed_yaml);
+
+    std::fs::write(path, yaml_content)?;
+
+    Ok(())
+}
+
+/// Extract leading comments from a YAML file
+fn extract_leading_comments(path: &str) -> Result<Vec<String>> {
+    let content = std::fs::read_to_string(path)?;
+    let mut comments = Vec::new();
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with('#') {
+            comments.push(line.to_string());
+        } else if trimmed == "---" {
+            // Stop at document start marker
+            break;
+        } else if !trimmed.is_empty() {
+            // Stop at first non-comment, non-empty line
+            break;
+        }
+    }
+
+    Ok(comments)
+}
+
+/// Add document start marker while preserving leading comments
+fn add_document_start_preserving_comments(comments: &[String], yaml: &str) -> String {
+    let mut result = String::new();
+
+    // Add leading comments
+    for comment in comments {
+        result.push_str(comment);
+        result.push('\n');
+    }
+
+    // Add document start marker
+    result.push_str("---\n");
+
+    // Add YAML content
+    result.push_str(yaml);
+
+    // Ensure trailing newline
+    if !result.ends_with('\n') {
+        result.push('\n');
+    }
+
+    result
 }
 
 #[cfg(test)]
@@ -552,5 +611,77 @@ mod tests {
         );
         assert_eq!(filtered.len(), 1);
         assert_eq!(filtered[0].name, "repo2"); // repo2 has backend AND api, not frontend
+    }
+
+    #[test]
+    fn test_save_config_preserves_comments() {
+        use std::io::Write;
+        let temp_dir = std::env::temp_dir();
+        let config_path = temp_dir.join("test_config_comments.yaml");
+
+        // Create a config file with leading comments
+        let content = r#"# This is a comment
+# Another comment line
+---
+  repositories:
+    - name: test-repo
+      url: https://github.com/test/repo
+      tags:
+        - test
+"#;
+        let mut file = std::fs::File::create(&config_path).unwrap();
+        file.write_all(content.as_bytes()).unwrap();
+        drop(file);
+
+        // Load the config
+        let mut config = Config::load(config_path.to_str().unwrap()).unwrap();
+
+        // Modify the config
+        config.repositories[0].add_tag("new-tag".to_string());
+
+        // Save it back
+        config.save(config_path.to_str().unwrap()).unwrap();
+
+        // Read the file and verify comments are preserved
+        let saved_content = std::fs::read_to_string(&config_path).unwrap();
+
+        assert!(saved_content.contains("# This is a comment"));
+        assert!(saved_content.contains("# Another comment line"));
+        assert!(saved_content.contains("---"));
+        assert!(saved_content.contains("new-tag"));
+
+        // Cleanup
+        std::fs::remove_file(&config_path).unwrap();
+    }
+
+    #[test]
+    fn test_save_config_without_existing_file() {
+        let temp_dir = std::env::temp_dir();
+        let config_path = temp_dir.join("test_config_new.yaml");
+
+        // Ensure file doesn't exist
+        let _ = std::fs::remove_file(&config_path);
+
+        // Create and save a new config
+        let mut config = Config::new();
+        let mut repo = Repository::new(
+            "new-repo".to_string(),
+            "https://github.com/test/new".to_string(),
+        );
+        repo.add_tag("tag1".to_string());
+        config.repositories.push(repo);
+
+        config.save(config_path.to_str().unwrap()).unwrap();
+
+        // Read and verify
+        let content = std::fs::read_to_string(&config_path).unwrap();
+
+        assert!(content.starts_with("---\n"));
+        assert!(content.contains("new-repo"));
+        assert!(content.contains("tag1"));
+        assert!(content.ends_with('\n'));
+
+        // Cleanup
+        std::fs::remove_file(&config_path).unwrap();
     }
 }

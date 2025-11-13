@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use clap::Parser;
 use colored::Colorize;
-use repos::{Repository, is_debug_mode, load_plugin_context};
+use repos::{Repository, is_debug_mode, load_plugin_context, save_config};
 use repos_github::GitHubClient;
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -268,28 +268,9 @@ fn apply_sync(config_path: &PathBuf, sync_map: &HashMap<String, TopicSync>) -> R
         }
     }
 
-    // Write back to file
-    let yaml = serde_yaml::to_string(&config).context("Failed to serialize updated config")?;
-
-    // Minimal fix for yamllint: indent array items under 'repositories:' and 'recipes:'
-    let fixed_yaml = yaml
-        .lines()
-        .map(|line| {
-            // Indent array items and their properties
-            if line.starts_with("- ") || (line.starts_with(" ") && !line.starts_with("   ")) {
-                format!("  {}", line)
-            } else {
-                line.to_string()
-            }
-        })
-        .collect::<Vec<_>>()
-        .join("\n");
-
-    // Add document marker for yamllint compliance
-    let updated_content = format!("---\n{}\n", fixed_yaml);
-
-    fs::write(config_path, &updated_content)
-        .context(format!("Failed to write config file: {:?}", config_path))?;
+    // Write back to file using centralized save_config function
+    save_config(&config, config_path.to_str().unwrap())
+        .context("Failed to write updated config")?;
 
     println!("{} Successfully updated config.yaml", "✅".green());
     println!("   {} repositories were synchronized", sync_map.len());

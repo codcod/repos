@@ -13,6 +13,7 @@ pub type Result<T> = anyhow::Result<T>;
 
 // Re-export commonly used types
 pub use commands::{Command, CommandContext};
+pub use config::loader::save_config;
 pub use config::{Config, Repository};
 pub use github::PrOptions;
 pub use plugins::PluginContext;
