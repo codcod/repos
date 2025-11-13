@@ -149,6 +149,14 @@ jobs:
           echo "VERSION=$VERSION" >> $GITHUB_ENV
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
+      - name: Update Cargo.toml version for release
+        run: |
+          # Update version in main Cargo.toml (remove -rc suffix)
+          sed -i "s/^version = \".*\"/version = \"${{ env.VERSION }}\"/" Cargo.toml
+
+          # Update version in workspace members if they reference the main version
+          find . -name "Cargo.toml" -not -path "./Cargo.toml" -exec sed -i "s/version = \".*-rc\"/version = \"${{ env.VERSION }}\"/" {} \;
+
       - name: Download all build artifacts
         uses: actions/download-artifact@v6
         with:
