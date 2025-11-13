@@ -1,35 +1,78 @@
-# repos-validate
+# repos-validate Plugin
 
-A plugin for the `repos` CLI tool that validates your `config.yaml` file and checks connectivity to all configured repositories.
+The `repos-validate` plugin checks your `config.yaml` file for correctness,
+verifies repository accessibility, and can synchronize GitHub topics with local
+tags.
 
 ## Features
 
-- **Configuration Syntax Validation**: Confirms that `config.yaml` is properly formatted and parseable
-- **Repository Connectivity Check**: Optionally verifies that each repository exists and is accessible via the GitHub API (with `--connect`)
-- **Topic Synchronization**: Synchronizes GitHub topics with config tags - adds missing topics and removes outdated gh: tags (with `--sync-topics`)
-- **Automatic Backup**: Creates timestamped backups before modifying `config.yaml`
+- **Configuration Syntax Validation**: Confirms that `config.yaml` is properly
+formatted and parseable.
+- **Repository Connectivity Check**: Verifies that each repository exists and is
+accessible.
+- **Topic Synchronization**: Synchronizes GitHub topics with config tags, adding
+missing topics from GitHub to your local config and prefixing them with `gh:`.
+- **Automatic Backup**: Creates timestamped backups before modifying `config.yaml`.
 
 ## Installation
 
-Build and install the plugin as part of the `repos` workspace:
+The plugin is installed as part of the `repos` workspace. You can build it from
+the root of the project:
 
 ```bash
 cargo build --release
-sudo cp target/release/repos-validate /usr/local/bin/
 ```
 
-Or install it directly:
-
-```bash
-cd plugins/repos-validate
-cargo install --path .
-```
+The binary will be located at `target/release/repos-validate`. Ensure this
+location is in your `PATH`, or move the binary to a directory like
+`/usr/local/bin`.
 
 ## Usage
 
-### Basic Validation
+```bash
+repos validate [OPTIONS]
+```
 
-Validate your configuration syntax:
+## Description
+
+This command performs several levels of validation:
+
+1. **Syntax Validation (Default)**: By default, `repos validate` only parses the
+`config.yaml` file to ensure it is well-formed. No network calls are made.
+2. **Connectivity Check**: When the `--connect` flag is added, it performs the
+syntax check and also attempts to connect to the Git remote URL for each
+repository. This verifies that the repository exists and that you have the
+necessary access permissions.
+3. **GitHub Topic Synchronization**: The `--sync-topics` option (which requires
+`--connect`) compares the tags in your `config.yaml` with the repository topics
+on GitHub. It will suggest adding missing topics as tags (with a `gh:` prefix)
+to your configuration. By itself, this option only shows a diff of the suggested
+changes.
+
+This command is essential for ensuring your configuration is correct before
+running bulk operations like `clone` or `run`.
+
+## Options
+
+- `-c, --config <CONFIG>`: Specifies the path to the configuration file.
+Defaults to `config.yaml`.
+- `--connect`: Checks network connectivity by attempting to connect to each
+repository's remote URL.
+- `--sync-topics`: Must be used with `--connect`. Compares repository topics on
+GitHub with local tags in `config.yaml` and suggests changes. It will prefix
+tags sourced from GitHub with `gh:`. This option only prints a diff of the
+suggested changes; it does not modify the file.
+- `--apply`: Must be used with `--sync-topics`. Applies the suggested topic
+synchronization changes directly to your `config.yaml` file. A backup of the
+original `config.yaml` will be created before changes are written.
+- `-h, --help`: Prints help information.
+
+## Examples
+
+### Validate config syntax only
+
+This is the default behavior. It runs quickly and performs no network
+operations.
 
 ```bash
 repos validate
@@ -39,13 +82,12 @@ Example output:
 
 ```console
 ✅ config.yaml syntax is valid.
-
-Validation finished successfully.
 ```
 
-### Check Repository Connectivity
+### Validate syntax and check repository connectivity
 
-Validate configuration and check that all repositories are accessible:
+This will check the config file and also verify that every repository URL is
+accessible.
 
 ```bash
 repos validate --connect
@@ -63,9 +105,10 @@ Validating repository connectivity...
 Validation finished successfully.
 ```
 
-### Synchronize GitHub Topics
+### Preview topic synchronization changes
 
-Preview which GitHub topics would be synchronized (added/removed) with config tags:
+This will check connectivity and show you which topics are on GitHub but are
+missing from the tags in your `config.yaml`. No files will be changed.
 
 ```bash
 repos validate --connect --sync-topics
@@ -79,27 +122,20 @@ Example output:
 Validating repository connectivity...
 ✅ codcod/repos: Accessible.
     - Would add: ["gh:cli", "gh:rust", "gh:automation"]
-    - Would remove: ["gh:deprecated-topic"]
 ✅ another/project: Accessible.
     - Topics already synchronized
 
 Validation finished successfully.
 ```
 
-### Apply Topic Synchronization
+### Apply topic synchronization changes
 
-To actually update your `config.yaml` with synchronized GitHub topics, use the `--apply` flag:
+This will check connectivity, find missing topics, and automatically add them as
+tags (with a `gh:` prefix) to your `config.yaml`.
 
 ```bash
 repos validate --connect --sync-topics --apply
 ```
-
-This will:
-
-1. Create a timestamped backup of your `config.yaml` (e.g., `config.yaml.backup.20251111_143022`)
-2. Fetch topics from GitHub for each repository
-3. Add missing topics as tags (prefixed with `gh:`)
-4. Remove outdated `gh:` tags that no longer exist in GitHub topics
 
 Example output:
 
@@ -109,7 +145,6 @@ Example output:
 Validating repository connectivity...
 ✅ codcod/repos: Accessible.
     - Topics to add: ["gh:cli", "gh:rust", "gh:automation"]
-    - Topics to remove: ["gh:deprecated-topic"]
 ✅ another/project: Accessible.
     - Topics already synchronized
 
@@ -123,7 +158,8 @@ Applying topic synchronization to config.yaml...
 
 ## Backup Files
 
-When using `--apply`, the plugin automatically creates a backup before modifying your configuration. Backup files are named with a timestamp pattern:
+When using `--apply`, the plugin automatically creates a backup before modifying
+your configuration. Backup files are named with a timestamp pattern:
 
 ```console
 config.yaml.backup.YYYYMMDD_HHMMSS
@@ -141,13 +177,13 @@ For private repositories or to avoid rate limiting, set your GitHub token:
 
 ```bash
 export GITHUB_TOKEN=your_github_personal_access_token
-repos validate
+repos validate --connect
 ```
 
 ## Exit Codes
 
-- `0`: All repositories are accessible
-- `1`: One or more repositories failed connectivity check
+- `0`: All checks passed successfully.
+- `1`: One or more validation checks failed.
 
 ## Supported Repository URL Formats
 
