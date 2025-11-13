@@ -32,4 +32,14 @@ coverage:
 list-plugins:
     ls -al /usr/local/bin/repos-* || echo "No plugins installed"
 
+[group('devex')]
+link-plugins:
+    sudo ln -sf $(pwd)/target/release/repos-health /usr/local/bin/repos-health
+    sudo ln -sf $(pwd)/target/release/repos-health /usr/local/bin/repos-health
+
+[group('devex')]
+unlink-plugins:
+    sudo rm -f /usr/local/bin/repos-health
+    sudo rm -f /usr/local/bin/repos-validate
+
 # vim: set filetype=Makefile ts=4 sw=4 et:
