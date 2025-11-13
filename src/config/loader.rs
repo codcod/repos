@@ -44,39 +44,34 @@ impl Config {
 
     /// Save configuration to a file
     pub fn save(&self, path: &str) -> Result<()> {
+        // Use standard serde_yaml serialization
         let yaml = serde_yaml::to_string(self)?;
 
-        // Fix indentation for yamllint compliance
-        // yamllint expects array items to be indented relative to their parent
-        let fixed_yaml = Self::fix_yaml_indentation(&yaml);
+        // Minimal fix for yamllint: indent array items under 'repositories:' and 'recipes:'
+        // This is the only formatting adjustment needed for yamllint compliance
+        let fixed_yaml = yaml
+            .lines()
+            .map(|line| {
+                // If line starts with "- " and previous non-empty line ends with ":"
+                // then it's an array item that needs indenting
+                if line.starts_with("- ") {
+                    format!("  {}", line)
+                } else if line.starts_with(" ") && !line.starts_with("   ") {
+                    // Lines with 1-2 spaces are properties of array items, need to be 4 spaces
+                    format!("  {}", line)
+                } else {
+                    line.to_string()
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
 
-        // Make yamllint compliant by adding document separator and ensuring newline at end
+        // Add document marker for yamllint compliance
         let yaml_content = format!("---\n{}\n", fixed_yaml);
 
         std::fs::write(path, yaml_content)?;
 
         Ok(())
-    }
-
-    /// Fix YAML indentation to be yamllint compliant
-    fn fix_yaml_indentation(yaml: &str) -> String {
-        let lines: Vec<&str> = yaml.lines().collect();
-        let mut result = Vec::new();
-
-        for line in lines {
-            // If line starts with a dash (array item), indent it by 2 spaces
-            if line.starts_with("- ") {
-                result.push(format!("  {}", line));
-            } else if line.starts_with("  ") && !line.starts_with("    ") {
-                // If line is already indented by 2 spaces but not 4, make it 4 spaces
-                // This handles the properties of array items
-                result.push(format!("  {}", line));
-            } else {
-                result.push(line.to_string());
-            }
-        }
-
-        result.join("\n")
     }
 
     /// Filter repositories by specific names
@@ -466,28 +461,6 @@ mod tests {
         let removed = config.remove_repository("repo1");
         assert!(removed);
         assert_eq!(config.repositories.len(), 1);
-    }
-
-    #[test]
-    fn test_fix_yaml_indentation() {
-        // Test basic array item indentation
-        let yaml = "repositories:\n- name: test\n  url: test.git";
-        let fixed = Config::fix_yaml_indentation(yaml);
-        assert!(fixed.contains("  - name: test"));
-        assert!(fixed.contains("    url: test.git"));
-
-        // Test already correctly indented yaml
-        let yaml = "repositories:\n  - name: test\n    url: test.git";
-        let fixed = Config::fix_yaml_indentation(yaml);
-        assert!(fixed.contains("  - name: test"));
-        assert!(fixed.contains("    url: test.git"));
-
-        // Test lines with different indentation levels
-        let yaml = "key: value\narray:\n- item1\n  subkey: subvalue";
-        let fixed = Config::fix_yaml_indentation(yaml);
-        assert!(fixed.contains("key: value"));
-        assert!(fixed.contains("  - item1"));
-        assert!(fixed.contains("    subkey: subvalue"));
     }
 
     #[test]

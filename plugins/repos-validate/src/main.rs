@@ -269,10 +269,26 @@ fn apply_sync(config_path: &PathBuf, sync_map: &HashMap<String, TopicSync>) -> R
     }
 
     // Write back to file
-    let updated_content =
-        serde_yaml::to_string(&config).context("Failed to serialize updated config")?;
+    let yaml = serde_yaml::to_string(&config).context("Failed to serialize updated config")?;
 
-    fs::write(config_path, updated_content)
+    // Minimal fix for yamllint: indent array items under 'repositories:' and 'recipes:'
+    let fixed_yaml = yaml
+        .lines()
+        .map(|line| {
+            // Indent array items and their properties
+            if line.starts_with("- ") || (line.starts_with(" ") && !line.starts_with("   ")) {
+                format!("  {}", line)
+            } else {
+                line.to_string()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    // Add document marker for yamllint compliance
+    let updated_content = format!("---\n{}\n", fixed_yaml);
+
+    fs::write(config_path, &updated_content)
         .context(format!("Failed to write config file: {:?}", config_path))?;
 
     println!("{} Successfully updated config.yaml", "✅".green());
