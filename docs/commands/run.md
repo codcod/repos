@@ -145,3 +145,19 @@ repos run --recipe update-deps
 ```bash
 repos run -t backend -p --recipe test
 ```
+
+## Exammple recipes
+
+List dependencies in java project limited to a specific package
+
+```yaml
+- name: dependency-list
+  steps:
+    - |
+      mvn dependency:list 2>&1 |
+        grep '^\[INFO\]    ' |
+        sed 's/\[INFO\]    //' |
+        sed 's/ -- module.*//' |
+        grep "com.myorg" |
+        sort -u
+```

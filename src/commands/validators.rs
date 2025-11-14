@@ -409,14 +409,26 @@ mod tests {
 
     #[test]
     fn test_validate_pr_args_with_env_var() {
+        // Save original state
+        let original_token = std::env::var("GITHUB_TOKEN").ok();
+
+        // Set test environment variable
         unsafe {
             std::env::set_var("GITHUB_TOKEN", "test_token");
         }
+
         let token = None;
         let result = validate_pr_args(&token);
+
+        // Restore original state
         unsafe {
-            std::env::remove_var("GITHUB_TOKEN");
+            if let Some(token_value) = original_token {
+                std::env::set_var("GITHUB_TOKEN", token_value);
+            } else {
+                std::env::remove_var("GITHUB_TOKEN");
+            }
         }
+
         assert!(result.is_ok());
     }
 
