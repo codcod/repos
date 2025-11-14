@@ -5,8 +5,16 @@ specified repositories.
 
 ## Usage
 
+To run a command:
+
 ```bash
-repos run [OPTIONS] <COMMAND_OR_RECIPE> [REPOS]...
+repos run [OPTIONS] [COMMAND] [REPOS]...
+```
+
+To run a recipe:
+
+```bash
+repos run [OPTIONS] --recipe <RECIPE_NAME> [REPOS]...
 ```
 
 ## Description
@@ -16,18 +24,17 @@ tasks across hundreds or thousands of repositories at once. You can run any
 shell command, from simple `ls` to complex `docker build` scripts.
 
 Additionally, you can define **recipes**—multi-step scripts—in your
-`config.yaml` and execute them by name. This is perfect for standardizing
-complex workflows like dependency updates, code generation, or release
-preparation.
+`config.yaml` and execute them by name using the `--recipe` option. This is
+perfect for standardizing complex workflows like dependency updates, code
+generation, or release preparation.
 
 By default, the output of each command is logged to a file in the `output/runs/`
 directory, but this can be disabled.
 
 ## Arguments
 
-- `<COMMAND_OR_RECIPE>`: The shell command to execute or the name of the recipe
-to run. If it is a command, it should be enclosed in quotes if it contains
-spaces or special characters.
+- `[COMMAND]`: The shell command to execute. This is a positional argument. It
+should be enclosed in quotes if it contains spaces or special characters.
 - `[REPOS]...`: A space-separated list of specific repository names to run the
 command in. If not provided, filtering will be based on tags.
 
@@ -35,6 +42,8 @@ command in. If not provided, filtering will be based on tags.
 
 - `-c, --config <CONFIG>`: Path to the configuration file. Defaults to
 `config.yaml`.
+- `-r, --recipe <RECIPE_NAME>`: The name of the recipe to run. This option is
+mutually exclusive with the `COMMAND` argument.
 - `-t, --tag <TAG>`: Filter repositories by tag. Can be specified multiple times
 (OR logic).
 - `-e, --exclude-tag <EXCLUDE_TAG>`: Exclude repositories with a specific tag.
@@ -58,17 +67,16 @@ Add a `recipes` section to your `config.yaml`:
 ```yaml
 recipes:
   - name: update-deps
-    steps: >
-      git checkout main
-      git pull
-      cargo update
-      cargo build --release
+    steps:
+      - git checkout main
+      - git pull
+      - cargo update
+      - cargo build --release
 
   - name: test
     steps:
-      - |
-        cargo test --all-features
-        run: cargo clippy
+      - cargo test --all-features
+      - cargo clippy
 ```
 
 Each recipe has a `name` and a list of `steps`. Each step is a shell command
@@ -76,7 +84,7 @@ executed sequentially.
 
 ### Running a Recipe
 
-To run a recipe, use its name as the main argument for the `run` command.
+To run a recipe, use its name with the `--recipe` option.
 
 ## Examples
 
@@ -129,11 +137,11 @@ repos run --no-save "ls -la"
 ### Run the 'update-deps' recipe on all repositories
 
 ```bash
-repos run update-deps
+repos run --recipe update-deps
 ```
 
 ### Run the 'test' recipe on backend repositories in parallel
 
 ```bash
-repos run -t backend -p test
+repos run -t backend -p --recipe test
 ```
