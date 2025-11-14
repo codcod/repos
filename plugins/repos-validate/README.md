@@ -82,6 +82,10 @@ Example output:
 
 ```console
 ✅ config.yaml syntax is valid.
+   42 repositories in config
+   15 unique tags: api, backend, cli, deprecated, frontend, gh:automation, gh:cli, gh:rust, java, javascript, microservice, python, rust, typescript, web
+
+Validation finished successfully.
 ```
 
 ### Validate syntax and check repository connectivity
@@ -97,6 +101,8 @@ Example output:
 
 ```console
 ✅ config.yaml syntax is valid.
+   42 repositories in config
+   15 unique tags: api, backend, cli, deprecated, frontend, gh:automation, gh:cli, gh:rust, java, javascript, microservice, python, rust, typescript, web
 
 Validating repository connectivity...
 ✅ codcod/repos: Accessible.
@@ -118,6 +124,8 @@ Example output:
 
 ```console
 ✅ config.yaml syntax is valid.
+   42 repositories in config
+   15 unique tags: api, backend, cli, deprecated, frontend, gh:automation, gh:cli, gh:rust, java, javascript, microservice, python, rust, typescript, web
 
 Validating repository connectivity...
 ✅ codcod/repos: Accessible.
@@ -141,6 +149,8 @@ Example output:
 
 ```console
 ✅ config.yaml syntax is valid.
+   42 repositories in config
+   15 unique tags: api, backend, cli, deprecated, frontend, gh:automation, gh:cli, gh:rust, java, javascript, microservice, python, rust, typescript, web
 
 Validating repository connectivity...
 ✅ codcod/repos: Accessible.
