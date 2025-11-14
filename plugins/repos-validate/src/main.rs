@@ -38,6 +38,21 @@ async fn main() -> Result<()> {
     }
 
     println!("{}", "✅ config.yaml syntax is valid.".green());
+
+    // Display summary information
+    println!("   {} repositories in config", repos.len());
+
+    // Collect and display unique tags
+    let unique_tags = get_unique_tags(&repos);
+    if !unique_tags.is_empty() {
+        println!(
+            "   {} unique tags: {}",
+            unique_tags.len(),
+            unique_tags.join(", ")
+        );
+    } else {
+        println!("   No tags defined");
+    }
     println!();
 
     if !args.connect {
@@ -190,6 +205,20 @@ fn parse_github_url(url: &str) -> Result<(String, String)> {
     }
 
     anyhow::bail!("Unsupported repository URL format: {}", url)
+}
+
+fn get_unique_tags(repos: &[Repository]) -> Vec<String> {
+    let mut tags: HashSet<String> = HashSet::new();
+
+    for repo in repos {
+        for tag in &repo.tags {
+            tags.insert(tag.clone());
+        }
+    }
+
+    let mut sorted_tags: Vec<String> = tags.into_iter().collect();
+    sorted_tags.sort();
+    sorted_tags
 }
 
 fn get_config_path() -> Result<PathBuf> {
