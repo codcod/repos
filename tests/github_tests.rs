@@ -199,9 +199,20 @@ async fn test_create_pr_workspace_commit_message_fallback() {
     let result = create_pr_from_workspace(&repo, &options).await;
     assert!(result.is_ok());
 
-    // Check that the commit was made with the title
+    // Get the created branch name (starts with "automated-changes-")
     let output = std::process::Command::new("git")
-        .args(["log", "-1", "--pretty=format:%s"])
+        .args(["branch", "--list", "automated-changes-*"])
+        .current_dir(&repo_path)
+        .output()
+        .expect("git branch failed");
+
+    let branches = String::from_utf8(output.stdout).unwrap();
+    let branch_name = branches.trim().trim_start_matches("* ").trim();
+    assert!(branch_name.starts_with("automated-changes-"));
+
+    // Check that the commit was made with the title on the created branch
+    let output = std::process::Command::new("git")
+        .args(["log", "-1", "--pretty=format:%s", branch_name])
         .current_dir(&repo_path)
         .output()
         .expect("git log failed");
@@ -355,9 +366,9 @@ async fn test_create_pr_workspace_custom_branch_and_commit() {
     let branches = String::from_utf8(output.stdout).unwrap();
     assert!(branches.contains("custom-branch"));
 
-    // Verify custom commit message was used
+    // Verify custom commit message was used on the custom-branch
     let output = std::process::Command::new("git")
-        .args(["log", "-1", "--pretty=format:%s"])
+        .args(["log", "-1", "--pretty=format:%s", "custom-branch"])
         .current_dir(&repo_path)
         .output()
         .expect("git log failed");
