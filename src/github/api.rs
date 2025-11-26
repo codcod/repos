@@ -8,6 +8,31 @@ use anyhow::Result;
 use colored::*;
 use uuid::Uuid;
 
+/// RAII guard to automatically restore the original branch on drop
+struct BranchGuard<'a> {
+    repo_path: String,
+    original_branch: Option<String>,
+    repo_name: &'a str,
+}
+
+impl Drop for BranchGuard<'_> {
+    fn drop(&mut self) {
+        if let Some(ref original) = self.original_branch
+            && let Err(e) = git::checkout_branch(&self.repo_path, original)
+        {
+            eprintln!(
+                "{} | {}",
+                self.repo_name.cyan().bold(),
+                format!(
+                    "Warning: Failed to restore original branch '{}': {}",
+                    original, e
+                )
+                .yellow()
+            );
+        }
+    }
+}
+
 /// High-level function to create a PR from local changes
 ///
 /// This function encapsulates the entire pull request creation flow:
@@ -26,6 +51,14 @@ pub async fn create_pr_from_workspace(repo: &Repository, options: &PrOptions) ->
         );
         return Ok(());
     }
+
+    // Save the current branch to restore later using RAII guard
+    let original_branch = git::get_current_branch(&repo_path).ok();
+    let _branch_guard = BranchGuard {
+        repo_path: repo_path.clone(),
+        original_branch: original_branch.clone(),
+        repo_name: &repo.name,
+    };
 
     // Generate branch name if not provided
     let branch_name = options.branch_name.clone().unwrap_or_else(|| {
@@ -60,6 +93,12 @@ pub async fn create_pr_from_workspace(repo: &Repository, options: &PrOptions) ->
             repo.name.cyan().bold(),
             "Pull request created:".green(),
             pr_url
+        );
+    } else {
+        println!(
+            "{} | {}",
+            repo.name.cyan().bold(),
+            "Branch created (not pushed, --create-only mode)".yellow()
         );
     }
 
@@ -99,16 +138,44 @@ async fn create_github_pr(
 }
 
 /// Parse a GitHub URL to extract owner and repository name
+///
+/// Supports both SSH (git@host:owner/repo) and HTTPS (https://host/owner/repo) formats.
+/// Works with GitHub, GitLab, Bitbucket, and other Git hosting providers.
 fn parse_github_url(url: &str) -> Result<(String, String)> {
     let url = url.trim_end_matches('/').trim_end_matches(".git");
 
-    let parts: Vec<&str> = url.split('/').collect();
-    if parts.len() < 2 {
-        anyhow::bail!("Invalid GitHub URL format: {url}");
+    // Handle SSH format: git@host:owner/repo or user@host:owner/repo
+    // The key indicator is the presence of '@' followed by ':' without '//'
+    if let Some(at_pos) = url.find('@')
+        && let Some(colon_pos) = url[at_pos..].find(':')
+    {
+        // Extract the path after the colon
+        let path_start = at_pos + colon_pos + 1;
+        let path = &url[path_start..];
+
+        // Split owner/repo - use rsplit to handle nested paths like owner/group/repo
+        let mut parts = path.rsplitn(2, '/');
+        let repo_name = parts.next().ok_or_else(|| {
+            anyhow::anyhow!("Invalid SSH URL format: missing repo name in {}", url)
+        })?;
+        let owner = parts
+            .next()
+            .ok_or_else(|| anyhow::anyhow!("Invalid SSH URL format: missing owner in {}", url))?;
+
+        return Ok((owner.to_string(), repo_name.to_string()));
     }
 
-    let repo_name = parts[parts.len() - 1];
-    let owner = parts[parts.len() - 2];
+    // Handle HTTPS format: https://host/owner/repo
+    // Use rsplit to efficiently get the last two segments
+    let mut parts = url.rsplitn(3, '/');
+    let repo_name = parts
+        .next()
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| anyhow::anyhow!("Invalid URL format: missing repo name in {}", url))?;
+    let owner = parts
+        .next()
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| anyhow::anyhow!("Invalid URL format: missing owner in {}", url))?;
 
     Ok((owner.to_string(), repo_name.to_string()))
 }
@@ -325,5 +392,61 @@ mod tests {
         };
 
         assert_eq!(options_with_base.base_branch.unwrap(), "develop");
+    }
+
+    #[test]
+    fn test_parse_github_url_https() {
+        // Test HTTPS URL parsing
+        let (owner, repo) =
+            parse_github_url("https://github.com/example-org/example-repo").unwrap();
+        assert_eq!(owner, "example-org");
+        assert_eq!(repo, "example-repo");
+
+        // Test with .git suffix
+        let (owner, repo) = parse_github_url("https://github.com/test-org/test-repo.git").unwrap();
+        assert_eq!(owner, "test-org");
+        assert_eq!(repo, "test-repo");
+
+        // Test with trailing slash
+        let (owner, repo) = parse_github_url("https://github.com/owner/repo/").unwrap();
+        assert_eq!(owner, "owner");
+        assert_eq!(repo, "repo");
+    }
+
+    #[test]
+    fn test_parse_github_url_ssh() {
+        // Test SSH URL parsing
+        let (owner, repo) = parse_github_url("git@github.com:example-org/example-repo").unwrap();
+        assert_eq!(owner, "example-org");
+        assert_eq!(repo, "example-repo");
+
+        // Test with .git suffix
+        let (owner, repo) = parse_github_url("git@github.com:test-org/test-repo.git").unwrap();
+        assert_eq!(owner, "test-org");
+        assert_eq!(repo, "test-repo");
+
+        // Test GitLab SSH format
+        let (owner, repo) = parse_github_url("git@gitlab.com:mycompany/myrepo").unwrap();
+        assert_eq!(owner, "mycompany");
+        assert_eq!(repo, "myrepo");
+
+        // Test Bitbucket SSH format
+        let (owner, repo) = parse_github_url("git@bitbucket.org:workspace/repository.git").unwrap();
+        assert_eq!(owner, "workspace");
+        assert_eq!(repo, "repository");
+    }
+
+    #[test]
+    fn test_parse_github_url_invalid() {
+        // Test truly invalid URLs - single words or malformed SSH
+        assert!(parse_github_url("invalid").is_err());
+        assert!(parse_github_url("git@github.com:").is_err());
+        assert!(parse_github_url("git@github.com:owner").is_err());
+
+        // Note: These cases actually succeed because they technically have owner/repo segments:
+        // - "https://github.com/" parses as owner="github.com", repo=""
+        // - "https://github.com/owner" parses as owner="github.com", repo="owner"
+        // These would fail at the API call level, not at URL parsing level
+        // To catch these, we'd need to validate against known hosts or check for empty strings
     }
 }

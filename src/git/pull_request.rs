@@ -116,9 +116,13 @@ pub fn push_branch(repo_path: &str, branch_name: &str) -> Result<()> {
         .context("Failed to execute git push command")?;
 
     if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
         anyhow::bail!(
-            "Failed to push branch: {}",
-            String::from_utf8_lossy(&output.stderr)
+            "Failed to push branch '{}' to remote 'origin':\nstderr: {}\nstdout: {}",
+            branch_name,
+            stderr.trim(),
+            stdout.trim()
         );
     }
 
@@ -158,4 +162,46 @@ pub fn get_default_branch(repo_path: &str) -> Result<String> {
 
     // Final fallback to default branch
     Ok(crate::constants::git::FALLBACK_BRANCH.to_string())
+}
+
+/// Get the current branch name
+pub fn get_current_branch(repo_path: &str) -> Result<String> {
+    let output = Command::new("git")
+        .args(["branch", "--show-current"])
+        .current_dir(repo_path)
+        .output()
+        .context("Failed to execute git branch command")?;
+
+    if !output.status.success() {
+        anyhow::bail!(
+            "Failed to get current branch: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    let branch = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if branch.is_empty() {
+        anyhow::bail!("No current branch (detached HEAD state?)");
+    }
+
+    Ok(branch)
+}
+
+/// Checkout an existing branch
+pub fn checkout_branch(repo_path: &str, branch_name: &str) -> Result<()> {
+    let output = Command::new("git")
+        .args(["checkout", branch_name])
+        .current_dir(repo_path)
+        .output()
+        .context("Failed to execute git checkout command")?;
+
+    if !output.status.success() {
+        anyhow::bail!(
+            "Failed to checkout branch '{}': {}",
+            branch_name,
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    Ok(())
 }

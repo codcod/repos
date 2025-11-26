@@ -34,6 +34,6 @@ pub mod pull_request;
 pub use clone::{clone_repository, remove_repository};
 pub use common::Logger;
 pub use pull_request::{
-    add_all_changes, commit_changes, create_and_checkout_branch, get_default_branch, has_changes,
-    push_branch,
+    add_all_changes, checkout_branch, commit_changes, create_and_checkout_branch,
+    get_current_branch, get_default_branch, has_changes, push_branch,
 };
