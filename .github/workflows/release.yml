@@ -18,7 +18,36 @@ env:
   RUST_BACKTRACE: 1
 
 jobs:
-  # 1. First, run tests and linting as a quality gate.
+  # 1. Determine version first before any other jobs
+  version:
+    name: Determine Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.set-version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Determine Version
+        id: semver
+        uses: PaulHatch/semantic-version@v5.4.0
+        with:
+          tag_prefix: "v"
+          major_pattern: "BREAKING CHANGE:"
+          minor_pattern: "feat:"
+          version_format: "${major}.${minor}.${patch}"
+          search_commit_body: true
+          debug: true
+
+      - name: Set VERSION output
+        id: set-version
+        run: |
+          VERSION="${{ steps.semver.outputs.version }}"
+          echo "Calculated semantic version: $VERSION"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+  # 2. Run tests and linting as a quality gate.
   test:
     name: Test & Lint
     runs-on: ubuntu-latest
@@ -34,11 +63,11 @@ jobs:
       - name: Run tests
         run: cargo test --all --locked
 
-  # 2. Build all required binaries for different targets.
-  #    This job runs only after tests have passed.
+  # 3. Build all required binaries with the correct version.
+  #    This job runs only after tests have passed and version is determined.
   build:
     name: Build Binaries
-    needs: test
+    needs: [version, test]
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -60,6 +89,17 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.target }}
+
+      - name: Update Cargo.toml version before build
+        run: |
+          VERSION="${{ needs.version.outputs.version }}"
+          echo "Building with version: $VERSION"
+          # Update version in main Cargo.toml
+          if [[ "$OSTYPE" == "darwin"* ]]; then
+            sed -i '' "s/^version = \".*\"/version = \"$VERSION\"/" Cargo.toml
+          else
+            sed -i "s/^version = \".*\"/version = \"$VERSION\"/" Cargo.toml
+          fi
 
       - name: Build main binary and plugins
         run: cargo build --release --target ${{ matrix.target }} --workspace
@@ -83,11 +123,11 @@ jobs:
             target/${{ matrix.target }}/release/repos-health
             target/${{ matrix.target }}/release/repos-validate
 
-  # 3. Create the universal macOS binary from the previously built artifacts.
+  # 4. Create the universal macOS binary from the previously built artifacts.
   #    This job is very fast as it does not re-compile anything.
   package-universal:
     name: Package Universal macOS
-    needs: build
+    needs: [version, build]
     runs-on: macos-latest
     steps:
       - name: Download macOS arm64 artifacts
@@ -117,45 +157,22 @@ jobs:
             repos-health
             repos-validate
 
-  # 4. Determine version, create the GitHub Release, and upload all artifacts.
+  # 5. Create the GitHub Release and upload all artifacts.
   #    This is the final publishing step.
   publish:
     name: Publish Release
-    needs: [build, package-universal]
+    needs: [version, build, package-universal]
     runs-on: ubuntu-latest
-    outputs:
-      version: ${{ steps.set-version.outputs.version }}
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - name: Determine Version
-        id: semver
-        uses: PaulHatch/semantic-version@v5.4.0
-        with:
-          tag_prefix: "v"
-          major_pattern: "BREAKING CHANGE:"
-          minor_pattern: "feat:"
-          version_format: "${major}.${minor}.${patch}"
-          search_commit_body: true
-          debug: true
-
-      - name: Set VERSION from semantic-version
-        id: set-version
+      - name: Set VERSION from version job
         run: |
-          VERSION="${{ steps.semver.outputs.version }}"
-          echo "Using semantic version: $VERSION"
+          VERSION="${{ needs.version.outputs.version }}"
+          echo "Publishing version: $VERSION"
           echo "VERSION=$VERSION" >> $GITHUB_ENV
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-
-      - name: Update Cargo.toml version for release
-        run: |
-          # Update version in main Cargo.toml (remove -rc suffix)
-          sed -i "s/^version = \".*\"/version = \"${{ env.VERSION }}\"/" Cargo.toml
-
-          # Update version in workspace members if they reference the main version
-          find . -name "Cargo.toml" -not -path "./Cargo.toml" -exec sed -i "s/version = \".*-rc\"/version = \"${{ env.VERSION }}\"/" {} \;
 
       - name: Download all build artifacts
         uses: actions/download-artifact@v6
@@ -204,11 +221,10 @@ jobs:
           files: |
             *.tar.gz
 
-  # 5. After a successful release, create a PR to merge the release branch
-  #    back into main and bump the version for the next development cycle.
+  # 6. After a successful release, create a PR to bump version in main
   sync-main:
     name: Sync Back to Main
-    needs: publish
+    needs: [version, publish]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -224,8 +240,8 @@ jobs:
       - name: Create version bump branch from main
         id: versioning
         run: |
-          RELEASE_VERSION=${{ needs.publish.outputs.version }}
-          # Calculate next version (e.g., 0.1.0 -> 0.2.0-rc)
+          RELEASE_VERSION=${{ needs.version.outputs.version }}
+          # Calculate next version (e.g., 0.2.1 -> 0.3.0-rc)
           MAJOR=$(echo "$RELEASE_VERSION" | cut -d. -f1)
           MINOR=$(echo "$RELEASE_VERSION" | cut -d. -f2)
           NEXT_MINOR=$((MINOR + 1))
