@@ -470,3 +470,165 @@ async fn test_init_command_integration_flow() {
     // Note: Config file may not be created if repositories don't have remote URLs
     // This is expected behavior in test scenarios
 }
+
+#[tokio::test]
+#[serial]
+async fn test_init_command_discovers_repos_two_levels_deep() {
+    let temp_dir = TempDir::new().unwrap();
+
+    // Create a repository 2 levels deep: ./cloned_repos/level_1/repo
+    let repo_dir = temp_dir
+        .path()
+        .join("cloned_repos")
+        .join("level_1")
+        .join("test-repo");
+    fs::create_dir_all(&repo_dir).unwrap();
+    fs::create_dir_all(repo_dir.join(".git")).unwrap();
+    create_git_repo(&repo_dir).unwrap();
+
+    // Add a remote URL so the repo will be included in the config
+    std::process::Command::new("git")
+        .args([
+            "remote",
+            "add",
+            "origin",
+            "git@github.com:test/test-repo.git",
+        ])
+        .current_dir(&repo_dir)
+        .output()
+        .unwrap();
+
+    let output_path = temp_dir.path().join("two-levels-config.yaml");
+    let command = InitCommand {
+        output: output_path.to_string_lossy().to_string(),
+        overwrite: false,
+        supplement: false,
+    };
+
+    let context = CommandContext {
+        config: Config::new(),
+        tag: vec![],
+        exclude_tag: vec![],
+        repos: None,
+        parallel: false,
+    };
+
+    let original_dir = std::env::current_dir().unwrap();
+    std::env::set_current_dir(temp_dir.path()).unwrap();
+
+    let result = command.execute(&context).await;
+
+    std::env::set_current_dir(original_dir).unwrap();
+
+    // Should succeed
+    assert!(result.is_ok());
+
+    // Config file should exist with the discovered repo
+    assert!(output_path.exists());
+
+    // Load and verify the config contains the discovered repo
+    let config = Config::load(&output_path.to_string_lossy()).unwrap();
+    assert_eq!(config.repositories.len(), 1);
+    assert_eq!(config.repositories[0].name, "test-repo");
+    assert_eq!(
+        config.repositories[0].url,
+        "git@github.com:test/test-repo.git"
+    );
+    assert_eq!(
+        config.repositories[0].path.as_ref().unwrap(),
+        "cloned_repos/level_1/test-repo"
+    );
+}
+
+#[tokio::test]
+#[serial]
+async fn test_init_command_depth_boundary() {
+    let temp_dir = TempDir::new().unwrap();
+
+    // Create repos at different depths to test the boundary
+    // Level 1: ./repo1 - should be discovered
+    let repo1_dir = temp_dir.path().join("repo1");
+    fs::create_dir_all(&repo1_dir).unwrap();
+    create_git_repo(&repo1_dir).unwrap();
+    std::process::Command::new("git")
+        .args(["remote", "add", "origin", "git@github.com:test/repo1.git"])
+        .current_dir(&repo1_dir)
+        .output()
+        .unwrap();
+
+    // Level 2: ./dir1/repo2 - should be discovered
+    let repo2_dir = temp_dir.path().join("dir1").join("repo2");
+    fs::create_dir_all(&repo2_dir).unwrap();
+    create_git_repo(&repo2_dir).unwrap();
+    std::process::Command::new("git")
+        .args(["remote", "add", "origin", "git@github.com:test/repo2.git"])
+        .current_dir(&repo2_dir)
+        .output()
+        .unwrap();
+
+    // Level 3: ./dir1/dir2/repo3 - should be discovered (2 levels deep)
+    let repo3_dir = temp_dir.path().join("dir1").join("dir2").join("repo3");
+    fs::create_dir_all(&repo3_dir).unwrap();
+    create_git_repo(&repo3_dir).unwrap();
+    std::process::Command::new("git")
+        .args(["remote", "add", "origin", "git@github.com:test/repo3.git"])
+        .current_dir(&repo3_dir)
+        .output()
+        .unwrap();
+
+    // Level 4: ./dir1/dir2/dir3/repo4 - should NOT be discovered (3 levels deep, too deep)
+    let repo4_dir = temp_dir
+        .path()
+        .join("dir1")
+        .join("dir2")
+        .join("dir3")
+        .join("repo4");
+    fs::create_dir_all(&repo4_dir).unwrap();
+    create_git_repo(&repo4_dir).unwrap();
+    std::process::Command::new("git")
+        .args(["remote", "add", "origin", "git@github.com:test/repo4.git"])
+        .current_dir(&repo4_dir)
+        .output()
+        .unwrap();
+
+    let output_path = temp_dir.path().join("depth-boundary-config.yaml");
+    let command = InitCommand {
+        output: output_path.to_string_lossy().to_string(),
+        overwrite: false,
+        supplement: false,
+    };
+
+    let context = CommandContext {
+        config: Config::new(),
+        tag: vec![],
+        exclude_tag: vec![],
+        repos: None,
+        parallel: false,
+    };
+
+    let original_dir = std::env::current_dir().unwrap();
+    std::env::set_current_dir(temp_dir.path()).unwrap();
+
+    let result = command.execute(&context).await;
+
+    std::env::set_current_dir(original_dir).unwrap();
+
+    // Should succeed
+    assert!(result.is_ok());
+    assert!(output_path.exists());
+
+    // Load and verify only repos 1, 2, and 3 are discovered (not repo4 which is too deep)
+    let config = Config::load(&output_path.to_string_lossy()).unwrap();
+    assert_eq!(config.repositories.len(), 3);
+
+    // Verify the discovered repos
+    let repo_names: Vec<&str> = config
+        .repositories
+        .iter()
+        .map(|r| r.name.as_str())
+        .collect();
+    assert!(repo_names.contains(&"repo1"));
+    assert!(repo_names.contains(&"repo2"));
+    assert!(repo_names.contains(&"repo3"));
+    assert!(!repo_names.contains(&"repo4")); // Should not be discovered
+}

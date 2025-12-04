@@ -41,7 +41,7 @@ impl Command for InitCommand {
         let current_dir = std::env::current_dir()?;
 
         for entry in WalkDir::new(&current_dir)
-            .max_depth(3)
+            .max_depth(4)
             .into_iter()
             .filter_map(|e| e.ok())
         {
