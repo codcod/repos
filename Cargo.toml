@@ -12,6 +12,7 @@ members = [
     ".",
     "common/repos-github",
     "plugins/repos-health",
+    "plugins/repos-review",
     "plugins/repos-validate",
 ]
 
