@@ -66,6 +66,38 @@ cargo build --release
 sudo cp target/release/repos /usr/local/bin/
 ```
 
+### Shell Completions
+
+`repos` can generate shell completions for zsh, bash, fish, PowerShell, and elvish.
+
+#### Zsh
+
+```bash
+# Generate completions
+repos completions zsh > ~/.zsh/completions/_repos
+
+# Or for Oh My Zsh
+mkdir -p ~/.oh-my-zsh/custom/plugins/repos-completions
+repos completions zsh > ~/.oh-my-zsh/custom/plugins/repos-completions/_repos
+
+# Add to your .zshrc
+fpath=(~/.zsh/completions $fpath)
+autoload -Uz compinit && compinit
+```
+
+#### Bash
+
+```bash
+repos completions bash > ~/.repos-completion.bash
+echo 'source ~/.repos-completion.bash' >> ~/.bashrc
+```
+
+#### Fish
+
+```bash
+repos completions fish > ~/.config/fish/completions/repos.fish
+```
+
 ## Quick Start
 
 The easiest way to get started is to let `repos` generate a configuration file

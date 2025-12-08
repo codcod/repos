@@ -1,8 +1,9 @@
 use anyhow::Result;
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
+use clap_complete::{Shell, generate};
 use repos::commands::validators;
 use repos::{commands::*, config::Config, constants, plugins};
-use std::{env, path::PathBuf};
+use std::{env, io, path::PathBuf};
 
 #[derive(Parser)]
 #[command(name = "repos")]
@@ -193,6 +194,13 @@ enum Commands {
         supplement: bool,
     },
 
+    /// Generate shell completions
+    Completions {
+        /// Shell to generate completions for
+        #[arg(value_enum)]
+        shell: Shell,
+    },
+
     /// External plugin command
     #[command(external_subcommand)]
     External(Vec<String>),
@@ -221,6 +229,11 @@ async fn main() -> Result<()> {
 
     // Handle commands
     match cli.command {
+        Some(Commands::Completions { shell }) => {
+            let mut cmd = Cli::command();
+            generate(shell, &mut cmd, "repos", &mut io::stdout());
+            return Ok(());
+        }
         Some(Commands::External(args)) => {
             if args.is_empty() {
                 anyhow::bail!("External command provided but no arguments given");
@@ -501,6 +514,10 @@ async fn execute_builtin_command(command: Commands) -> Result<()> {
             }
             .execute(&context)
             .await?;
+        }
+        Commands::Completions { .. } => {
+            // Handled in main(), this should not be reached
+            unreachable!("Completions command should be handled in main()")
         }
     }
 
