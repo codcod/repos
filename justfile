@@ -35,11 +35,13 @@ list-plugins:
 [group('devex')]
 link-plugins:
     sudo ln -sf $(pwd)/target/release/repos-health /usr/local/bin/repos-health
-    sudo ln -sf $(pwd)/target/release/repos-health /usr/local/bin/repos-health
+    sudo ln -sf $(pwd)/target/release/repos-validate /usr/local/bin/repos-validate
+    sudo ln -sf $(pwd)/target/release/repos-review /usr/local/bin/repos-review
 
 [group('devex')]
 unlink-plugins:
     sudo rm -f /usr/local/bin/repos-health
     sudo rm -f /usr/local/bin/repos-validate
+    sudo rm -f /usr/local/bin/repos-review
 
 # vim: set filetype=Makefile ts=4 sw=4 et:
