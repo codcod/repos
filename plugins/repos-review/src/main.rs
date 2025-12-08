@@ -72,7 +72,7 @@ fn select_repository(repos: &[Repository]) -> Result<Option<Repository>> {
             "--height=100%",
             "--ansi",
             "--preview",
-            "git -C {} status | head -20 | awk 'NF {print \"\\033[32m\" $0 \"\\033[0m\"}'",
+            r#"if git -C {} diff-index --quiet HEAD -- 2>/dev/null; then git -C {} status | head -20 | awk 'NF {print "\033[32m" $0 "\033[0m"}'; else git -C {} status | head -20 | awk 'NF {print "\033[31m" $0 "\033[0m"}'; fi"#,
             "--preview-window=right:50%",
             "--no-sort",
         ])
