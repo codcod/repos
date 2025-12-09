@@ -141,6 +141,7 @@ overview. Click on a command to see its detailed documentation.
 | [**`rm`**](./docs/commands/rm.md) | Removes cloned repositories from your local disk. |
 | [**`init`**](./docs/commands/init.md) | Generates a `config.yaml` file from local Git repositories. |
 | [**`validate`**](./plugins/repos-validate/README.md) | Validates config file, repository connectivity, and synchronizes topics (via plugin). |
+| [**`review`**](./plugins/repos-review/README.md) | Uses UI to review changes (via plugin). |
 
 For a full list of options for any command, run `repos <COMMAND> --help`.
 
