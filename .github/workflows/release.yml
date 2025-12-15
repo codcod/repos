@@ -115,7 +115,7 @@ jobs:
           fi
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: build-artifacts-${{ matrix.asset_name_suffix }}
           path: |
@@ -149,7 +149,7 @@ jobs:
           strip -x repos repos-health repos-validate
 
       - name: Upload universal artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: build-artifacts-macos-universal
           path: |
