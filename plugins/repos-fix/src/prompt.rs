@@ -1,0 +1,222 @@
+use crate::analysis::ProjectAnalysis;
+use crate::domain::PlatformType;
+use crate::jira::JiraTicket;
+use anyhow::{Context, Result};
+use minijinja::{Environment, context};
+use std::env;
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
+
+static TEMPLATE_ENV: OnceLock<Environment<'static>> = OnceLock::new();
+
+fn template_override_dir() -> Option<PathBuf> {
+    let xdg_config = env::var_os("XDG_CONFIG_HOME")
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from);
+
+    let base = xdg_config.or_else(|| {
+        env::var_os("HOME")
+            .filter(|value| !value.is_empty())
+            .map(|home| PathBuf::from(home).join(".config"))
+    });
+
+    base.map(|base| base.join("repos").join("fix"))
+}
+
+fn read_override_template(filename: &str) -> Option<String> {
+    let path = template_override_dir()?.join(filename);
+    if path.is_file() {
+        fs::read_to_string(&path).ok()
+    } else {
+        None
+    }
+}
+
+fn load_template_source(filename: &str, fallback: &'static str) -> &'static str {
+    if let Some(source) = read_override_template(filename) {
+        Box::leak(source.into_boxed_str())
+    } else {
+        fallback
+    }
+}
+
+fn load_guidelines(filename: &str, fallback: &'static str) -> String {
+    read_override_template(filename).unwrap_or_else(|| fallback.to_string())
+}
+
+fn get_template_env() -> &'static Environment<'static> {
+    TEMPLATE_ENV.get_or_init(|| {
+        let mut env = Environment::new();
+
+        // Load templates from embedded strings
+        env.add_template(
+            "cursor_prompt",
+            load_template_source("cursor_prompt.md", include_str!("templates/cursor_prompt.md")),
+        )
+            .expect("Failed to add cursor_prompt template");
+        env.add_template(
+            "cursorrules",
+            load_template_source("cursorrules.md", include_str!("templates/cursorrules.md")),
+        )
+            .expect("Failed to add cursorrules template");
+        env.add_template(
+            "agent_prompt",
+            load_template_source("agent_prompt.md", include_str!("templates/agent_prompt.md")),
+        )
+            .expect("Failed to add agent_prompt template");
+
+        env
+    })
+}
+
+pub struct PromptGenerator;
+
+impl PromptGenerator {
+    pub fn generate_cursor_prompt(
+        ticket: &JiraTicket,
+        analysis: &ProjectAnalysis,
+        additional_prompt: Option<&str>,
+    ) -> Result<String> {
+        let env = get_template_env();
+        let tmpl = env.get_template("cursor_prompt")?;
+
+        let platform_guidelines = Self::get_platform_guidelines(&analysis.platform.platform_type);
+
+        let ctx = context! {
+            platform_emoji => analysis.platform.platform_type.emoji(),
+            ticket => ticket,
+            platform_name => analysis.platform.platform_type.as_str().to_uppercase(),
+            languages => analysis.platform.languages.iter()
+                .map(|l| l.as_str())
+                .collect::<Vec<_>>()
+                .join(", "),
+            frameworks => analysis.platform.frameworks.iter()
+                .map(|f| f.as_str())
+                .collect::<Vec<_>>()
+                .join(", "),
+            source_dirs => analysis.project_structure.source_directories
+                .iter()
+                .take(5)
+                .cloned()
+                .collect::<Vec<_>>()
+                .join(", "),
+            config_files => analysis.project_structure.config_files
+                .iter()
+                .take(5)
+                .cloned()
+                .collect::<Vec<_>>()
+                .join(", "),
+            has_di => !analysis.architecture_patterns.dependency_injection.is_empty(),
+            di_frameworks => analysis.architecture_patterns.dependency_injection.join(", "),
+            has_reactive => !analysis.architecture_patterns.reactive.is_empty(),
+            reactive_frameworks => analysis.architecture_patterns.reactive.join(", "),
+            has_ui => !analysis.architecture_patterns.ui_framework.is_empty(),
+            ui_frameworks => analysis.architecture_patterns.ui_framework.join(", "),
+            has_test_frameworks => !analysis.test_structure.test_frameworks.is_empty(),
+            test_frameworks => analysis.test_structure.test_frameworks.iter()
+                .map(|f| f.as_str())
+                .collect::<Vec<_>>()
+                .join(", "),
+            has_test_dirs => !analysis.test_structure.test_directories.is_empty(),
+            test_dirs => analysis.test_structure.test_directories
+                .iter()
+                .take(3)
+                .cloned()
+                .collect::<Vec<_>>()
+                .join(", "),
+            platform_guidelines => platform_guidelines,
+            main_build => analysis.build_commands.main_build,
+            test_compile => analysis.build_commands.test_compile,
+            test_run => analysis.build_commands.test_run,
+            additional_prompt => additional_prompt,
+        };
+
+        Ok(tmpl.render(ctx)?)
+    }
+
+    pub fn generate_cursorrules(
+        ticket: &JiraTicket,
+        analysis: &ProjectAnalysis,
+        ask_mode: bool,
+    ) -> Result<String> {
+        let env = get_template_env();
+        let tmpl = env.get_template("cursorrules")?;
+
+        let test_step_num = if analysis.build_commands.test_compile.is_some() {
+            "3"
+        } else {
+            "2"
+        };
+
+        let ctx = context! {
+            mode_title => if ask_mode { "ASK Mode Analysis" } else { "Automated Maintenance Assistant" },
+            ask_mode => ask_mode,
+            ticket => ticket,
+            platform_name => analysis.platform.platform_type.as_str().to_uppercase(),
+            main_build => analysis.build_commands.main_build,
+            test_compile => analysis.build_commands.test_compile,
+            test_run => analysis.build_commands.test_run,
+            test_step_num => test_step_num,
+        };
+
+        Ok(tmpl.render(ctx)?)
+    }
+
+    pub fn generate_agent_prompt(
+        ticket: &JiraTicket,
+        analysis: &ProjectAnalysis,
+        ask_mode: bool,
+        additional_prompt: Option<&str>,
+    ) -> Result<String> {
+        let env = get_template_env();
+        let tmpl = env.get_template("agent_prompt")?;
+
+        let test_run_step = if analysis.build_commands.test_compile.is_some() {
+            "8"
+        } else {
+            "7"
+        };
+
+        let ctx = context! {
+            ask_mode => ask_mode,
+            ticket => ticket,
+            main_build => analysis.build_commands.main_build,
+            test_compile => analysis.build_commands.test_compile,
+            test_run => analysis.build_commands.test_run,
+            test_run_step => test_run_step,
+            additional_prompt => additional_prompt,
+        };
+
+        Ok(tmpl.render(ctx)?)
+    }
+
+    pub fn save_to_file(content: &str, path: &Path, filename: &str) -> Result<()> {
+        let file_path = path.join(filename);
+        fs::write(&file_path, content).with_context(|| format!("Failed to write {}", filename))?;
+        println!("Created: {}", file_path.display());
+        Ok(())
+    }
+
+    fn get_platform_guidelines(platform: &PlatformType) -> String {
+        match platform {
+            PlatformType::Ios => load_guidelines(
+                "guidelines_ios.md",
+                include_str!("templates/guidelines_ios.md"),
+            ),
+            PlatformType::Android => load_guidelines(
+                "guidelines_android.md",
+                include_str!("templates/guidelines_android.md"),
+            ),
+            PlatformType::Java => load_guidelines(
+                "guidelines_java.md",
+                include_str!("templates/guidelines_java.md"),
+            ),
+            PlatformType::Angular => load_guidelines(
+                "guidelines_angular.md",
+                include_str!("templates/guidelines_angular.md"),
+            ),
+            PlatformType::Unknown => String::new(),
+        }
+    }
+}

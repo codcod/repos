@@ -33,3 +33,4 @@ config.yaml
 tarpaulin-report.html
 test-*/
 tests/test-recipes.yaml
+.link-to-xdg-home-config
