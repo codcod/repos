@@ -2,9 +2,15 @@
 `SOLUTION_SUMMARY.md`.
 
 Ticket: {{ ticket.key }} - {{ ticket.title }}
+{% if has_knowledge_base %}
+Knowledge base: Read `{{ knowledge_base_dir }}/` in the workspace before analysis.
+{% endif %}
 {% else %}Fix the ticket with minimal, compatible changes and tests.
 
 Ticket: {{ ticket.key }} - {{ ticket.title }}
+{% if has_knowledge_base %}
+Knowledge base: Read `{{ knowledge_base_dir }}/` in the workspace before changes.
+{% endif %}
 Build: `{{ main_build }}`
 {% if test_compile %}Test compile: `{{ test_compile }}`
 {% endif %}Tests: `{{ test_run }}`

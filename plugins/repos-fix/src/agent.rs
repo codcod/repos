@@ -251,8 +251,7 @@ impl CursorAgentRunner {
             return Ok(false);
         }
 
-        let content =
-            fs::read_to_string(&analysis_file).context("Failed to read ANALYSIS.md")?;
+        let content = fs::read_to_string(&analysis_file).context("Failed to read ANALYSIS.md")?;
 
         if content.trim().is_empty() {
             eprintln!("⚠️  ANALYSIS.md is empty");

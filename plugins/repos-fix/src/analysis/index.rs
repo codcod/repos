@@ -1,5 +1,5 @@
 use anyhow::Result;
-use std::collections::{HashSet, HashMap};
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
@@ -73,9 +73,9 @@ impl RepoIndex {
 
     /// Check if any file contains a pattern in its path
     pub fn has_path_pattern(&self, pattern: &str) -> bool {
-        self.files.iter().any(|p| {
-            p.to_string_lossy().contains(pattern)
-        })
+        self.files
+            .iter()
+            .any(|p| p.to_string_lossy().contains(pattern))
     }
 
     /// Get all files with a specific extension

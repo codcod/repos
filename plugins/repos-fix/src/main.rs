@@ -35,6 +35,10 @@ struct Args {
     #[arg(short, long)]
     prompt: Option<String>,
 
+    /// Directory containing markdown knowledge base files
+    #[arg(long)]
+    knowledge_dir: Option<PathBuf>,
+
     /// Number of recent JIRA comments to include in prompts
     #[arg(long, default_value_t = 10)]
     num_comments: usize,
@@ -63,6 +67,7 @@ fn main() -> Result<()> {
         args.ask,
         args.workspace,
         args.prompt,
+        args.knowledge_dir,
         args.num_comments,
         debug,
     );

@@ -52,9 +52,11 @@ impl ProjectAnalyzer {
 
         // Analyze structure and patterns
         let structure_analyzer = StructureAnalyzer::new(&index, &self.repo_path);
-        let architecture_patterns = structure_analyzer.analyze_architecture(&platform.platform_type);
+        let architecture_patterns =
+            structure_analyzer.analyze_architecture(&platform.platform_type);
         let test_structure = structure_analyzer.analyze_test_structure(&platform.platform_type);
-        let project_structure = structure_analyzer.analyze_project_structure(&platform.platform_type);
+        let project_structure =
+            structure_analyzer.analyze_project_structure(&platform.platform_type);
         let build_commands = structure_analyzer.determine_build_commands(&platform.platform_type);
 
         Ok(ProjectAnalysis {

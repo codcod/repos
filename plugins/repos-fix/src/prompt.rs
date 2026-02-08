@@ -10,6 +10,14 @@ use std::sync::OnceLock;
 
 static TEMPLATE_ENV: OnceLock<Environment<'static>> = OnceLock::new();
 
+#[derive(Clone, Debug, Default)]
+pub struct KnowledgeContext {
+    pub dir_name: String,
+    pub files: Vec<String>,
+    pub inline_files: Vec<String>,
+    pub inline_content: Option<String>,
+}
+
 fn template_override_dir() -> Option<PathBuf> {
     let xdg_config = env::var_os("XDG_CONFIG_HOME")
         .filter(|value| !value.is_empty())
@@ -52,19 +60,22 @@ fn get_template_env() -> &'static Environment<'static> {
         // Load templates from embedded strings
         env.add_template(
             "cursor_prompt",
-            load_template_source("cursor_prompt.md", include_str!("templates/cursor_prompt.md")),
+            load_template_source(
+                "cursor_prompt.md",
+                include_str!("templates/cursor_prompt.md"),
+            ),
         )
-            .expect("Failed to add cursor_prompt template");
+        .expect("Failed to add cursor_prompt template");
         env.add_template(
             "cursorrules",
             load_template_source("cursorrules.md", include_str!("templates/cursorrules.md")),
         )
-            .expect("Failed to add cursorrules template");
+        .expect("Failed to add cursorrules template");
         env.add_template(
             "agent_prompt",
             load_template_source("agent_prompt.md", include_str!("templates/agent_prompt.md")),
         )
-            .expect("Failed to add agent_prompt template");
+        .expect("Failed to add agent_prompt template");
 
         env
     })
@@ -77,12 +88,14 @@ impl PromptGenerator {
         ticket: &JiraTicket,
         analysis: &ProjectAnalysis,
         additional_prompt: Option<&str>,
+        knowledge: Option<&KnowledgeContext>,
     ) -> Result<String> {
         let env = get_template_env();
         let tmpl = env.get_template("cursor_prompt")?;
 
         let platform_guidelines = Self::get_platform_guidelines(&analysis.platform.platform_type);
         let is_security_task = Self::is_security_task(ticket);
+        let has_knowledge_base = knowledge.map(|ctx| !ctx.files.is_empty()).unwrap_or(false);
 
         let ctx = context! {
             platform_emoji => analysis.platform.platform_type.emoji(),
@@ -132,6 +145,11 @@ impl PromptGenerator {
             test_run => analysis.build_commands.test_run,
             is_security_task => is_security_task,
             additional_prompt => additional_prompt,
+            has_knowledge_base => has_knowledge_base,
+            knowledge_base_dir => knowledge.map(|ctx| ctx.dir_name.as_str()).unwrap_or(""),
+            knowledge_base_files => knowledge.map(|ctx| ctx.files.clone()).unwrap_or_default(),
+            knowledge_base_inline_files => knowledge.map(|ctx| ctx.inline_files.clone()).unwrap_or_default(),
+            knowledge_base_content => knowledge.and_then(|ctx| ctx.inline_content.as_deref()),
         };
 
         Ok(tmpl.render(ctx)?)
@@ -172,6 +190,7 @@ impl PromptGenerator {
         analysis: &ProjectAnalysis,
         ask_mode: bool,
         additional_prompt: Option<&str>,
+        knowledge: Option<&KnowledgeContext>,
     ) -> Result<String> {
         let env = get_template_env();
         let tmpl = env.get_template("agent_prompt")?;
@@ -182,6 +201,7 @@ impl PromptGenerator {
             "7"
         };
         let is_security_task = Self::is_security_task(ticket);
+        let has_knowledge_base = knowledge.map(|ctx| !ctx.files.is_empty()).unwrap_or(false);
 
         let ctx = context! {
             ask_mode => ask_mode,
@@ -192,6 +212,10 @@ impl PromptGenerator {
             test_run_step => test_run_step,
             is_security_task => is_security_task,
             additional_prompt => additional_prompt,
+            has_knowledge_base => has_knowledge_base,
+            knowledge_base_dir => knowledge.map(|ctx| ctx.dir_name.as_str()).unwrap_or(""),
+            knowledge_base_files => knowledge.map(|ctx| ctx.files.clone()).unwrap_or_default(),
+            knowledge_base_inline_files => knowledge.map(|ctx| ctx.inline_files.clone()).unwrap_or_default(),
         };
 
         Ok(tmpl.render(ctx)?)

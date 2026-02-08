@@ -16,6 +16,12 @@ build-plugins:
     cargo build --release -p repos-review
     cargo build --release -p repos-fix
 
+# Format and lint the code
+[group('qa')]
+fmt:
+    cargo fmt --all
+    cargo clippy --all-targets --all-features -- -D warnings
+
 # Run tests
 [group('qa')]
 test:

@@ -1,11 +1,14 @@
 use crate::agent::CursorAgentRunner;
 use crate::analysis::ProjectAnalyzer;
 use crate::jira::{JiraClient, JiraTicket, parse_jira_input};
-use crate::prompt::PromptGenerator;
+use crate::prompt::{KnowledgeContext, PromptGenerator};
 use crate::workspace::{RepoManager, WorkspaceManager};
 use anyhow::{Context, Result};
 use colored::Colorize;
 use repos::Repository;
+use std::collections::{HashMap, HashSet};
+use std::ffi::OsStr;
+use std::fs;
 use std::path::{Path, PathBuf};
 
 pub struct FixWorkflow {
@@ -14,6 +17,7 @@ pub struct FixWorkflow {
     ask_mode: bool,
     workspace_dir: Option<PathBuf>,
     additional_prompt: Option<String>,
+    knowledge_dir: Option<PathBuf>,
     num_comments: usize,
     debug: bool,
 }
@@ -25,6 +29,7 @@ impl FixWorkflow {
         ask_mode: bool,
         workspace_dir: Option<PathBuf>,
         additional_prompt: Option<String>,
+        knowledge_dir: Option<PathBuf>,
         num_comments: usize,
         debug: bool,
     ) -> Self {
@@ -34,6 +39,7 @@ impl FixWorkflow {
             ask_mode,
             workspace_dir,
             additional_prompt,
+            knowledge_dir,
             num_comments,
             debug,
         }
@@ -113,12 +119,28 @@ impl FixWorkflow {
         // Step 4: Analyze project
         let analysis = self.analyze_project(&repo_dir)?;
 
-        // Step 5: Generate prompts and context
-        self.generate_artifacts(&jira_ticket, &analysis, &ticket_dir, repo, &repo_dir)?;
+        // Step 5: Prepare knowledge base (optional)
+        let knowledge = self.prepare_knowledge_base(&jira_ticket, &ticket_dir)?;
 
-        // Step 6: Run cursor-agent
+        // Step 6: Generate prompts and context
+        self.generate_artifacts(
+            &jira_ticket,
+            &analysis,
+            &ticket_dir,
+            repo,
+            &repo_dir,
+            knowledge.as_ref(),
+        )?;
+
+        // Step 7: Run cursor-agent
         let agent_runner = CursorAgentRunner::new()?;
-        self.run_agent(&agent_runner, &ticket_dir, &jira_ticket, &analysis)?;
+        self.run_agent(
+            &agent_runner,
+            &ticket_dir,
+            &jira_ticket,
+            &analysis,
+            knowledge.as_ref(),
+        )?;
 
         // Verify and report
         self.verify_and_report(&agent_runner, &ticket_dir, &jira_ticket.key, &repo_dir)?;
@@ -252,13 +274,21 @@ impl FixWorkflow {
         ticket_dir: &Path,
         repo: &Repository,
         repo_dir: &Path,
+        knowledge: Option<&KnowledgeContext>,
     ) -> Result<()> {
         println!(
             "{}",
-            "Step 5: Generating context and prompts...".bold().cyan()
+            "Step 6: Generating context and prompts...".bold().cyan()
         );
 
         // Save context
+        let knowledge_context = knowledge.map(|ctx| {
+            serde_json::json!({
+                "dir": ctx.dir_name,
+                "files": ctx.files,
+                "inline_files": ctx.inline_files
+            })
+        });
         let context = serde_json::json!({
             "ticket": ticket,
             "repository": {
@@ -268,7 +298,8 @@ impl FixWorkflow {
             },
             "analysis": analysis,
             "mode": if self.ask_mode { "ask" } else { "implementation" },
-            "workspace": ticket_dir.to_string_lossy()
+            "workspace": ticket_dir.to_string_lossy(),
+            "knowledge_base": knowledge_context
         });
 
         let context_str =
@@ -280,6 +311,7 @@ impl FixWorkflow {
             ticket,
             analysis,
             self.additional_prompt.as_deref(),
+            knowledge,
         )?;
         PromptGenerator::save_to_file(&cursor_prompt, ticket_dir, "cursor_prompt.md")?;
 
@@ -293,6 +325,7 @@ impl FixWorkflow {
             analysis,
             self.ask_mode,
             self.additional_prompt.as_deref(),
+            knowledge,
         )?;
         PromptGenerator::save_to_file(&agent_prompt, ticket_dir, "agent_prompt.md")?;
 
@@ -306,14 +339,16 @@ impl FixWorkflow {
         ticket_dir: &Path,
         ticket: &JiraTicket,
         analysis: &crate::analysis::ProjectAnalysis,
+        knowledge: Option<&KnowledgeContext>,
     ) -> Result<()> {
-        println!("{}", "Step 6: Running cursor-agent...".bold().cyan());
+        println!("{}", "Step 7: Running cursor-agent...".bold().cyan());
 
         let agent_prompt = PromptGenerator::generate_agent_prompt(
             ticket,
             analysis,
             self.ask_mode,
             self.additional_prompt.as_deref(),
+            knowledge,
         )?;
         agent_runner.run_with_retry(ticket_dir, &agent_prompt, self.ask_mode, 3)?;
 
@@ -354,5 +389,242 @@ impl FixWorkflow {
         }
 
         Ok(())
+    }
+
+    fn prepare_knowledge_base(
+        &self,
+        ticket: &JiraTicket,
+        ticket_dir: &Path,
+    ) -> Result<Option<KnowledgeContext>> {
+        println!("{}", "Step 5: Preparing knowledge base...".bold().cyan());
+        let knowledge_dir = match &self.knowledge_dir {
+            Some(dir) => dir,
+            None => {
+                println!("  ℹ️  No knowledge base directory provided");
+                println!();
+                return Ok(None);
+            }
+        };
+
+        let markdown_files = Self::list_markdown_files(knowledge_dir)?;
+        if markdown_files.is_empty() {
+            println!("  ⚠️  Knowledge base directory has no .md files");
+            println!();
+            return Ok(None);
+        }
+
+        let dest_dir = ticket_dir.join("knowledge");
+        fs::create_dir_all(&dest_dir)
+            .with_context(|| format!("Failed to create {}", dest_dir.display()))?;
+
+        let mut file_contents = Vec::new();
+        let mut copied_files = Vec::new();
+        for path in markdown_files {
+            let filename = path
+                .file_name()
+                .and_then(OsStr::to_str)
+                .unwrap_or("unknown.md")
+                .to_string();
+            fs::copy(&path, dest_dir.join(&filename))
+                .with_context(|| format!("Failed to copy knowledge file {}", path.display()))?;
+            let content = fs::read_to_string(&path)
+                .with_context(|| format!("Failed to read knowledge file {}", path.display()))?;
+            copied_files.push(filename.clone());
+            file_contents.push((filename, content));
+        }
+
+        copied_files.sort();
+        file_contents.sort_by(|a, b| a.0.cmp(&b.0));
+
+        let selection = Self::select_inline_knowledge(ticket, &file_contents);
+        let inline_content = Self::build_inline_knowledge(&selection);
+
+        println!("  {} Knowledge files: {}", "✓".green(), copied_files.len());
+        if let Some(content) = &inline_content {
+            println!(
+                "  {} Inlined knowledge size: {} chars",
+                "✓".green(),
+                content.len()
+            );
+        }
+        println!();
+
+        Ok(Some(KnowledgeContext {
+            dir_name: "knowledge".to_string(),
+            files: copied_files,
+            inline_files: selection.iter().map(|(name, _)| name.clone()).collect(),
+            inline_content,
+        }))
+    }
+
+    fn list_markdown_files(dir: &Path) -> Result<Vec<PathBuf>> {
+        let mut files = Vec::new();
+        for entry in fs::read_dir(dir)
+            .with_context(|| format!("Failed to read knowledge directory {}", dir.display()))?
+        {
+            let entry = entry?;
+            let path = entry.path();
+            if path.is_file()
+                && path
+                    .extension()
+                    .and_then(OsStr::to_str)
+                    .map(|ext| ext.eq_ignore_ascii_case("md"))
+                    .unwrap_or(false)
+            {
+                files.push(path);
+            }
+        }
+        files.sort();
+        Ok(files)
+    }
+
+    fn select_inline_knowledge(
+        ticket: &JiraTicket,
+        files: &[(String, String)],
+    ) -> Vec<(String, String)> {
+        const MAX_INLINE_FILES: usize = 4;
+        const MAX_KEYWORDS: usize = 50;
+
+        let mut keywords = Self::extract_keywords(ticket, MAX_KEYWORDS);
+        if !ticket.key.is_empty() {
+            keywords.push(ticket.key.to_lowercase());
+        }
+        let keyword_set: HashSet<String> = keywords.into_iter().collect();
+
+        let mut scored: Vec<(usize, String, String)> = files
+            .iter()
+            .map(|(name, content)| {
+                let mut score = 0usize;
+                let name_lower = name.to_lowercase();
+                let content_lower = content.to_lowercase();
+                for keyword in &keyword_set {
+                    if name_lower.contains(keyword) {
+                        score += 2;
+                    }
+                    if content_lower.contains(keyword) {
+                        score += 1;
+                    }
+                }
+                (score, name.clone(), content.clone())
+            })
+            .collect();
+
+        scored.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.cmp(&b.1)));
+
+        let mut selected = Vec::new();
+        for (score, name, content) in scored.into_iter() {
+            if score == 0 && !selected.is_empty() {
+                break;
+            }
+            selected.push((name, content));
+            if selected.len() >= MAX_INLINE_FILES {
+                break;
+            }
+        }
+
+        if selected.is_empty() && !files.is_empty() {
+            let (name, content) = &files[0];
+            selected.push((name.clone(), content.clone()));
+        }
+
+        selected
+    }
+
+    fn build_inline_knowledge(files: &[(String, String)]) -> Option<String> {
+        const MAX_INLINE_CHARS: usize = 12_000;
+        const MAX_FILE_CHARS: usize = 4_000;
+
+        if files.is_empty() {
+            return None;
+        }
+
+        let mut combined = String::new();
+        for (name, content) in files {
+            if combined.len() >= MAX_INLINE_CHARS {
+                break;
+            }
+            let mut snippet = content.trim().to_string();
+            if snippet.len() > MAX_FILE_CHARS {
+                snippet.truncate(MAX_FILE_CHARS);
+                snippet.push_str("\n\n[Truncated]\n");
+            }
+            let entry = format!("## Knowledge Base: {}\n\n{}\n\n", name, snippet);
+            if combined.len() + entry.len() > MAX_INLINE_CHARS {
+                break;
+            }
+            combined.push_str(&entry);
+        }
+
+        if combined.trim().is_empty() {
+            None
+        } else {
+            Some(combined)
+        }
+    }
+
+    fn extract_keywords(ticket: &JiraTicket, max_keywords: usize) -> Vec<String> {
+        let mut text = String::new();
+        text.push_str(&ticket.title);
+        text.push(' ');
+        text.push_str(&ticket.description);
+        text.push(' ');
+        text.push_str(&ticket.issue_type);
+        for label in &ticket.labels {
+            text.push(' ');
+            text.push_str(label);
+        }
+
+        let mut keywords = Vec::new();
+        let stopwords = Self::stopwords();
+        let mut seen = HashSet::new();
+        for token in text
+            .to_lowercase()
+            .split(|ch: char| !ch.is_ascii_alphanumeric())
+        {
+            if token.len() < 4 || stopwords.contains(token) {
+                continue;
+            }
+            if seen.insert(token.to_string()) {
+                keywords.push(token.to_string());
+                if keywords.len() >= max_keywords {
+                    break;
+                }
+            }
+        }
+        keywords
+    }
+
+    fn stopwords() -> HashSet<&'static str> {
+        HashMap::from([
+            ("that", ""),
+            ("this", ""),
+            ("with", ""),
+            ("from", ""),
+            ("into", ""),
+            ("your", ""),
+            ("have", ""),
+            ("will", ""),
+            ("should", ""),
+            ("could", ""),
+            ("would", ""),
+            ("there", ""),
+            ("their", ""),
+            ("about", ""),
+            ("these", ""),
+            ("those", ""),
+            ("which", ""),
+            ("while", ""),
+            ("where", ""),
+            ("what", ""),
+            ("when", ""),
+            ("like", ""),
+            ("also", ""),
+            ("only", ""),
+            ("make", ""),
+            ("just", ""),
+        ])
+        .keys()
+        .copied()
+        .collect()
     }
 }

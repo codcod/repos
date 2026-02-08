@@ -66,11 +66,7 @@ impl<'a> DependencyAnalyzer<'a> {
             .map(|line| line.trim().to_string())
             .collect();
 
-        if deps.is_empty() {
-            None
-        } else {
-            Some(deps)
-        }
+        if deps.is_empty() { None } else { Some(deps) }
     }
 
     fn parse_gradle_files(&self) -> Option<Vec<String>> {
@@ -117,11 +113,7 @@ impl<'a> DependencyAnalyzer<'a> {
             .map(|line| line.trim().to_string())
             .collect();
 
-        if pods.is_empty() {
-            None
-        } else {
-            Some(pods)
-        }
+        if pods.is_empty() { None } else { Some(pods) }
     }
 
     fn parse_package_json(&self) -> Option<Vec<String>> {
@@ -141,10 +133,6 @@ impl<'a> DependencyAnalyzer<'a> {
             }
         }
 
-        if deps.is_empty() {
-            None
-        } else {
-            Some(deps)
-        }
+        if deps.is_empty() { None } else { Some(deps) }
     }
 }

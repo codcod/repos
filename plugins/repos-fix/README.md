@@ -104,6 +104,7 @@ This generates a `SOLUTION_SUMMARY.md` with the proposed plan.
 
 -   `--workspace <DIR>`: Specify a custom directory for generated artifacts (default: `workspace/fix/<TICKET_ID>`).
 -   `--prompt "..."`: Append extra instructions to the AI agent (e.g., "Use Java 17 features").
+-   `--knowledge-dir <DIR>`: Copy markdown knowledge base files into the workspace and inline selected content into prompts.
 
 ## Workflow
 
@@ -114,12 +115,13 @@ When you run `repos fix`, the following steps occur:
 3.  **Analyze Project**: detailed inspection of platform, languages, frameworks, dependencies, and test setup.
 4.  **Generate Context**: Creates `mission-context.json` with all analysis data.
 5.  **Generate Prompts**: Creates `.cursorrules` and `cursor_prompt.md` tailored to the specific project.
-6.  **Run Cursor Agent**:
+6.  **Include Knowledge Base (optional)**: Copies markdown docs into `workspace/fix/<TICKET_ID>/knowledge/` and inlines selected docs into the prompt.
+7.  **Run Cursor Agent**:
     -   Executes `cursor-agent` with `--force` and `--print` flags.
     -   **Auto-Retry**: If the agent fails (e.g., build fails, tests fail), it automatically retries up to **3 times**, feeding the error message back to the AI.
     -   **Workflow Switch**: CVE/security tickets use a safe upgrade protocol (no vulnerability reproduction); bug fixes require a repro-first flow.
-7.  **Validate**: The agent validates the fix by running build and test commands detected during analysis.
-8.  **Report**: Generates `SOLUTION_SUMMARY.md` with implementation details.
+8.  **Validate**: The agent validates the fix by running build and test commands detected during analysis.
+9.  **Report**: Generates `SOLUTION_SUMMARY.md` with implementation details.
 
 ## Output
 

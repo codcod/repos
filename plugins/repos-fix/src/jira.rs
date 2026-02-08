@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use reqwest::blocking::Client;
-use reqwest::header::{HeaderMap, HeaderValue, ACCEPT, CONTENT_TYPE};
+use reqwest::header::{ACCEPT, CONTENT_TYPE, HeaderMap, HeaderValue};
 use serde::{Deserialize, Serialize};
 use std::env;
 
@@ -266,7 +266,9 @@ impl JiraClient {
                     .or_else(|| comment.get("body").and_then(|body| body.as_str()))
                     .unwrap_or("");
 
-                let body = html2text::from_read(raw_body.as_bytes(), 80).trim().to_string();
+                let body = html2text::from_read(raw_body.as_bytes(), 80)
+                    .trim()
+                    .to_string();
                 if body.is_empty() {
                     return None;
                 }
@@ -323,5 +325,8 @@ pub fn parse_jira_input(input: &str) -> Result<(String, String)> {
     let jira_url = env::var("JIRA_URL")
         .context("JIRA_URL not set. Provide full URL or set JIRA_URL environment variable")?;
 
-    Ok((jira_url.trim_end_matches('/').to_string(), input.to_string()))
+    Ok((
+        jira_url.trim_end_matches('/').to_string(),
+        input.to_string(),
+    ))
 }
