@@ -22,7 +22,7 @@ If not provided, filtering will be based on tags.
 ## Options
 
 - `-c, --config <CONFIG>`: Path to the configuration file. Defaults to
-`config.yaml`.
+`repos.yaml`.
 - `-t, --tag <TAG>`: Filter repositories to remove only those with the specified
 tag. Can be used multiple times.
 - `-e, --exclude-tag <EXCLUDE_TAG>`: Exclude repositories with a specific tag

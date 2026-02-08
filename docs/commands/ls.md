@@ -1,6 +1,6 @@
 # repos ls
 
-The `ls` command lists repositories specified in your `config.yaml` file with
+The `ls` command lists repositories specified in your `repos.yaml` file with
 optional filtering capabilities.
 
 ## Usage
@@ -28,7 +28,7 @@ repositories defined in the config.
 ## Options
 
 - `-c, --config <CONFIG>`: Specifies the path to the configuration file.
-Defaults to `config.yaml`.
+Defaults to `repos.yaml`.
 - `-t, --tag <TAG>`: Filters repositories to list only those that have the
 specified tag. This option can be used multiple times to include repositories
 with *any* of the specified tags (OR logic).
@@ -114,7 +114,7 @@ repos clone --tag flow
 ### Use with custom config
 
 ```bash
-repos ls --config path/to/custom-config.yaml
+repos ls --config path/to/custom-repos.yaml
 ```
 
 ## Use Cases

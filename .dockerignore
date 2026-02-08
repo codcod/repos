@@ -17,7 +17,7 @@ docs/
 target/
 
 # Local configs and data
-config.yaml
+repos.yaml
 cloned_repos/
 logs/
 

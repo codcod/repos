@@ -49,8 +49,8 @@ enum Commands {
         #[arg(value_name = "COMMAND", help = "Command to execute")]
         command: Option<String>,
 
-        /// Name of a recipe defined in config.yaml
-        #[arg(long, help = "Name of a recipe defined in config.yaml")]
+        /// Name of a recipe defined in repos.yaml
+        #[arg(long, help = "Name of a recipe defined in repos.yaml")]
         recipe: Option<String>,
 
         /// Specific repository names to run command in (if not provided, uses tag filter or all repos)
@@ -179,7 +179,7 @@ enum Commands {
         json: bool,
     },
 
-    /// Create a config.yaml file from discovered Git repositories
+    /// Create a repos.yaml file from discovered Git repositories
     Init {
         /// Output file name
         #[arg(short, long, default_value_t = constants::config::DEFAULT_CONFIG_FILE.to_string())]

@@ -171,7 +171,7 @@ mod tests {
         // Change to temp directory (empty, no git repos)
         std::env::set_current_dir(temp_dir.path()).unwrap();
 
-        let output_path = temp_dir.path().join("empty-config.yaml");
+        let output_path = temp_dir.path().join("empty-repos.yaml");
         let command = InitCommand {
             output: output_path.to_string_lossy().to_string(),
             overwrite: false,
@@ -202,7 +202,7 @@ mod tests {
     #[tokio::test]
     async fn test_init_command_no_overwrite_existing_file() {
         let temp_dir = TempDir::new().unwrap();
-        let output_path = temp_dir.path().join("existing-config.yaml");
+        let output_path = temp_dir.path().join("existing-repos.yaml");
 
         // Create existing file
         fs::write(&output_path, "existing content").unwrap();
@@ -251,7 +251,7 @@ mod tests {
     #[serial]
     async fn test_init_command_supplement_with_existing_config() {
         let temp_dir = TempDir::new().unwrap();
-        let output_path = temp_dir.path().join("existing-config.yaml");
+        let output_path = temp_dir.path().join("existing-repos.yaml");
 
         // Create existing config with one repository
         let existing_config = Config {
@@ -303,7 +303,7 @@ mod tests {
     #[serial]
     async fn test_init_command_supplement_without_existing_config() {
         let temp_dir = TempDir::new().unwrap();
-        let output_path = temp_dir.path().join("new-config.yaml");
+        let output_path = temp_dir.path().join("new-repos.yaml");
         let original_dir = std::env::current_dir().unwrap();
 
         // Change to temp directory (empty, no git repos)

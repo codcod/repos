@@ -24,7 +24,7 @@ tasks across hundreds or thousands of repositories at once. You can run any
 shell command, from simple `ls` to complex `docker build` scripts.
 
 Additionally, you can define **recipes**—multi-step scripts—in your
-`config.yaml` and execute them by name using the `--recipe` option. This is
+`repos.yaml` and execute them by name using the `--recipe` option. This is
 perfect for standardizing complex workflows like dependency updates, code
 generation, or release preparation.
 
@@ -41,7 +41,7 @@ command in. If not provided, filtering will be based on tags.
 ## Options
 
 - `-c, --config <CONFIG>`: Path to the configuration file. Defaults to
-`config.yaml`.
+`repos.yaml`.
 - `-r, --recipe <RECIPE_NAME>`: The name of the recipe to run. This option is
 mutually exclusive with the `COMMAND` argument.
 - `-t, --tag <TAG>`: Filter repositories by tag. Can be specified multiple times
@@ -57,12 +57,12 @@ instead of the default `output/runs`.
 
 ## Recipes
 
-Recipes are named, multi-step scripts defined in your `config.yaml`. They allow
+Recipes are named, multi-step scripts defined in your `repos.yaml`. They allow
 you to codify and reuse common workflows.
 
 ### Defining a Recipe
 
-Add a `recipes` section to your `config.yaml`:
+Add a `recipes` section to your `repos.yaml`:
 
 ```yaml
 recipes:

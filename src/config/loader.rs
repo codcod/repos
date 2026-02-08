@@ -160,7 +160,7 @@ impl Default for Config {
 
 /// Save a config to a file with proper YAML formatting and comment preservation
 ///
-/// This is the centralized function for writing config.yaml files. It ensures:
+/// This is the centralized function for writing repos.yaml files. It ensures:
 /// - Leading comments are preserved
 /// - YAML document start marker (---) is added after comments
 /// - Proper indentation for yamllint compliance

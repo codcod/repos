@@ -1,6 +1,6 @@
 # repos clone
 
-The `clone` command clones repositories specified in your `config.yaml` file
+The `clone` command clones repositories specified in your `repos.yaml` file
 into your local workspace.
 
 ## Usage
@@ -24,7 +24,7 @@ repositories defined in the config.
 ## Options
 
 - `-c, --config <CONFIG>`: Specifies the path to the configuration file.
-Defaults to `config.yaml`.
+Defaults to `repos.yaml`.
 - `-t, --tag <TAG>`: Filters repositories to clone only those that have the
 specified tag. This option can be used multiple times to include repositories
 with *any* of the specified tags (OR logic).

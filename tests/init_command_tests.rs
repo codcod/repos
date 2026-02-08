@@ -30,7 +30,7 @@ fn create_git_repo(path: &std::path::Path) -> std::io::Result<()> {
 #[serial]
 async fn test_init_command_basic_creation() {
     let temp_dir = TempDir::new().unwrap();
-    let output_path = temp_dir.path().join("basic-config.yaml");
+    let output_path = temp_dir.path().join("basic-repos.yaml");
 
     // Create a git repository so the command has something to discover
     let repo_dir = temp_dir.path().join("test-repo");
@@ -70,7 +70,7 @@ async fn test_init_command_basic_creation() {
 #[serial]
 async fn test_init_command_overwrite_existing_file() {
     let temp_dir = TempDir::new().unwrap();
-    let output_path = temp_dir.path().join("existing-config.yaml");
+    let output_path = temp_dir.path().join("existing-repos.yaml");
 
     // Create existing file
     fs::write(&output_path, "existing content").unwrap();
@@ -113,7 +113,7 @@ async fn test_init_command_overwrite_existing_file() {
 #[serial]
 async fn test_init_command_no_overwrite_existing_file() {
     let temp_dir = TempDir::new().unwrap();
-    let output_path = temp_dir.path().join("existing-config.yaml");
+    let output_path = temp_dir.path().join("existing-repos.yaml");
 
     // Create existing file
     fs::write(&output_path, "existing content").unwrap();
@@ -161,7 +161,7 @@ async fn test_init_command_with_git_repository() {
     )
     .unwrap();
 
-    let output_path = temp_dir.path().join("discovered-config.yaml");
+    let output_path = temp_dir.path().join("discovered-repos.yaml");
     let command = InitCommand {
         output: output_path.to_string_lossy().to_string(),
         overwrite: false,
@@ -193,7 +193,7 @@ async fn test_init_command_with_git_repository() {
 #[serial]
 async fn test_init_command_supplement_with_duplicate_repository() {
     let temp_dir = TempDir::new().unwrap();
-    let output_path = temp_dir.path().join("config-with-duplicate.yaml");
+    let output_path = temp_dir.path().join("repos-with-duplicate.yaml");
 
     // Create existing config with a repository
     let existing_config = Config {
@@ -243,7 +243,7 @@ async fn test_init_command_supplement_with_duplicate_repository() {
 #[serial]
 async fn test_init_command_supplement_with_new_repository() {
     let temp_dir = TempDir::new().unwrap();
-    let output_path = temp_dir.path().join("config-with-supplement.yaml");
+    let output_path = temp_dir.path().join("repos-with-supplement.yaml");
 
     // Create existing config with one repository
     let existing_config = Config {
@@ -309,7 +309,7 @@ async fn test_init_command_git_directory_edge_cases() {
     fs::create_dir_all(&repo_with_git_file).unwrap();
     fs::write(repo_with_git_file.join(".git"), "gitdir: ../real-git-dir").unwrap();
 
-    let output_path = temp_dir.path().join("edge-case-config.yaml");
+    let output_path = temp_dir.path().join("edge-case-repos.yaml");
     let command = InitCommand {
         output: output_path.to_string_lossy().to_string(),
         overwrite: false,
@@ -340,7 +340,7 @@ async fn test_init_command_git_directory_edge_cases() {
 #[serial]
 async fn test_init_command_empty_directory() {
     let temp_dir = TempDir::new().unwrap();
-    let output_path = temp_dir.path().join("empty-config.yaml");
+    let output_path = temp_dir.path().join("empty-repos.yaml");
 
     let command = InitCommand {
         output: output_path.to_string_lossy().to_string(),
@@ -387,7 +387,7 @@ async fn test_init_command_multiple_git_repositories() {
         create_git_repo(repo_dir).unwrap();
     }
 
-    let output_path = temp_dir.path().join("multi-repo-config.yaml");
+    let output_path = temp_dir.path().join("multi-repo-repos.yaml");
     let command = InitCommand {
         output: output_path.to_string_lossy().to_string(),
         overwrite: false,
@@ -498,7 +498,7 @@ async fn test_init_command_discovers_repos_two_levels_deep() {
         .output()
         .unwrap();
 
-    let output_path = temp_dir.path().join("two-levels-config.yaml");
+    let output_path = temp_dir.path().join("two-levels-repos.yaml");
     let command = InitCommand {
         output: output_path.to_string_lossy().to_string(),
         overwrite: false,
@@ -591,7 +591,7 @@ async fn test_init_command_depth_boundary() {
         .output()
         .unwrap();
 
-    let output_path = temp_dir.path().join("depth-boundary-config.yaml");
+    let output_path = temp_dir.path().join("depth-boundary-repos.yaml");
     let command = InitCommand {
         output: output_path.to_string_lossy().to_string(),
         overwrite: false,

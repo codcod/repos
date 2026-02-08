@@ -11,8 +11,8 @@ inventory complements existing automated tests and surfaces gaps.
 ### 1.1 Load valid config file with repositories and recipes
 
 - Description: Verify a well-formed YAML with repositories + recipes parses into internal model.
-- Preconditions: `config.yaml` exists, contains at least one repository and one recipe.
-- Steps: Run any command requiring config load (e.g. `repos clone --config config.yaml`).
+- Preconditions: `repos.yaml` exists, contains at least one repository and one recipe.
+- Steps: Run any command requiring config load (e.g. `repos clone --config repos.yaml`).
 - Expected:
   - Happy: Config loads; repositories & recipes accessible; no warnings.
   - Negative: N/A (covered in malformed / missing cases below).
