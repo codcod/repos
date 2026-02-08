@@ -39,7 +39,7 @@ The core CLI:
    - `REPOS_DEBUG=1` (if --debug flag was passed)
    - `REPOS_TOTAL_REPOS=28` (total repos in config)
    - `REPOS_FILTERED_COUNT=5` (repos after filtering)
-   - `REPOS_CONFIG_FILE=/path/to/your/config.yaml` (path to config file)
+   - `REPOS_CONFIG_FILE=/path/to/your/repos.yaml` (path to config file)
 6. Executes `repos-health prs` with only plugin-specific args
 
 ### Using Context Injection in Your Plugin
@@ -174,7 +174,7 @@ Here's a simple example of a health check plugin written in bash:
 echo "=== Repository Health Check ==="
 
 # Parse arguments
-CONFIG_FILE="config.yaml"
+CONFIG_FILE="repos.yaml"
 VERBOSE=false
 
 while [[ $# -gt 0 ]]; do
@@ -222,7 +222,7 @@ import sys
 
 def main():
     parser = argparse.ArgumentParser(description='Security audit for repositories')
-    parser.add_argument('-c', '--config', default='config.yaml', help='Config file path')
+    parser.add_argument('-c', '--config', default='repos.yaml', help='Config file path')
     parser.add_argument('--fix', action='store_true', help='Attempt to fix issues automatically')
     args = parser.parse_args()
 
@@ -291,7 +291,7 @@ Examples:
 repos health
 
 # Run health check with custom config and verbose output
-repos health -c my-config.yaml -v
+repos health -c my-repos.yaml -v
 
 # Run security audit
 repos security --config production.yaml
@@ -324,7 +324,7 @@ repos security --fix
 
 ### Integration
 
-- Plugins should work with the standard `config.yaml` format
+- Plugins should work with the standard `repos.yaml` format
 - Parse the YAML configuration to access repository information
 - Consider the repository structure (name, path, tags, etc.)
 
@@ -338,14 +338,14 @@ Most plugins will need to read the repos configuration file. Here's how to parse
 
 ```bash
 # Install yq: brew install yq (macOS) or similar
-repos=$(yq eval '.repositories[].name' config.yaml)
+repos=$(yq eval '.repositories[].name' repos.yaml)
 ```
 
 **Python:**
 
 ```python
 import yaml
-with open('config.yaml', 'r') as f:
+with open('repos.yaml', 'r') as f:
     config = yaml.safe_load(f)
     repositories = config.get('repositories', [])
 ```
@@ -356,7 +356,7 @@ with open('config.yaml', 'r') as f:
 use serde_yaml;
 use std::fs;
 
-let content = fs::read_to_string("config.yaml")?;
+let content = fs::read_to_string("repos.yaml")?;
 let config: serde_yaml::Value = serde_yaml::from_str(&content)?;
 ```
 

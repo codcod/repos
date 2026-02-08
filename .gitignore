@@ -29,7 +29,7 @@ cloned_repos*/
 coverage/
 *.profraw
 logs/
-config.yaml
+repos.yaml
 tarpaulin-report.html
 test-*/
 tests/test-recipes.yaml

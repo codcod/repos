@@ -21,7 +21,7 @@ engineers working with complex microservice architectures.
 ## Features
 
 - **Centralized Repository Management**: Define all your repositories in a
-single, easy-to-manage `config.yaml` file.
+single, easy-to-manage `repos.yaml` file.
 - **Tag-Based Filtering**: Assign tags to your repositories and use them to run
 commands on specific subsets of your projects (e.g., `backend`, `frontend`,
 `java`, `rust`).
@@ -113,7 +113,7 @@ for you.
 
 2. **Generate the config file**:
    Run `repos init` in the `my-projects` directory. It will scan for Git
-   repositories and create a `config.yaml` file.
+   repositories and create a `repos.yaml` file.
 
    ```bash
    repos init
@@ -139,7 +139,7 @@ overview. Click on a command to see its detailed documentation.
 | [**`run`**](./docs/commands/run.md) | Runs a shell command or a pre-defined recipe in each repository. |
 | [**`pr`**](./docs/commands/pr.md) | Creates pull requests for repositories with changes. |
 | [**`rm`**](./docs/commands/rm.md) | Removes cloned repositories from your local disk. |
-| [**`init`**](./docs/commands/init.md) | Generates a `config.yaml` file from local Git repositories. |
+| [**`init`**](./docs/commands/init.md) | Generates a `repos.yaml` file from local Git repositories. |
 | [**`validate`**](./plugins/repos-validate/README.md) | Validates config file, repository connectivity, and synchronizes topics (via plugin). |
 | [**`review`**](./plugins/repos-review/README.md) | Uses UI to review changes (via plugin). |
 | [**`fix`**](./plugins/repos-fix/README.md) | Automatically fixes bugs based on JIRA tickets using Cursor AI (via plugin). |
@@ -148,7 +148,7 @@ For a full list of options for any command, run `repos <COMMAND> --help`.
 
 ## Configuration
 
-The `config.yaml` file is the heart of `repos`. It defines your repositories and
+The `repos.yaml` file is the heart of `repos`. It defines your repositories and
 their metadata.
 
 ```yaml

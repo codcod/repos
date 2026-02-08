@@ -9,7 +9,7 @@ use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
 #[command(name = "repos-validate")]
-#[command(about = "Validate config.yaml syntax and repository connectivity")]
+#[command(about = "Validate repos.yaml syntax and repository connectivity")]
 struct Args {
     /// Validate connectivity to repositories
     #[arg(long)]
@@ -19,7 +19,7 @@ struct Args {
     #[arg(long, requires = "connect")]
     sync_topics: bool,
 
-    /// Apply the topic synchronization to config.yaml (requires --sync-topics)
+    /// Apply the topic synchronization to repos.yaml (requires --sync-topics)
     #[arg(long, requires = "sync_topics")]
     apply: bool,
 }
@@ -37,7 +37,7 @@ async fn main() -> Result<()> {
         eprintln!("Loaded {} repositories from context", repos.len());
     }
 
-    println!("{}", "✅ config.yaml syntax is valid.".green());
+    println!("{}", "✅ repos.yaml syntax is valid.".green());
 
     // Display summary information
     println!("   {} repositories in config", repos.len());
@@ -231,8 +231,8 @@ fn get_config_path() -> Result<PathBuf> {
         return Ok(PathBuf::from(config));
     }
 
-    // Default to config.yaml in current directory
-    Ok(PathBuf::from("config.yaml"))
+    // Default to repos.yaml in current directory
+    Ok(PathBuf::from("repos.yaml"))
 }
 
 fn create_backup(config_path: &PathBuf) -> Result<PathBuf> {
@@ -247,7 +247,7 @@ fn create_backup(config_path: &PathBuf) -> Result<PathBuf> {
 }
 
 fn apply_sync(config_path: &PathBuf, sync_map: &HashMap<String, TopicSync>) -> Result<()> {
-    println!("Applying topic synchronization to config.yaml...");
+    println!("Applying topic synchronization to repos.yaml...");
 
     // Create backup first
     create_backup(config_path)?;
@@ -258,7 +258,7 @@ fn apply_sync(config_path: &PathBuf, sync_map: &HashMap<String, TopicSync>) -> R
 
     // Parse as YAML
     let mut config: serde_yaml::Value =
-        serde_yaml::from_str(&content).context("Failed to parse config.yaml")?;
+        serde_yaml::from_str(&content).context("Failed to parse repos.yaml")?;
 
     // Update repositories with synchronized topics
     if let Some(repos) = config
@@ -301,7 +301,7 @@ fn apply_sync(config_path: &PathBuf, sync_map: &HashMap<String, TopicSync>) -> R
     save_config(&config, config_path.to_str().unwrap())
         .context("Failed to write updated config")?;
 
-    println!("{} Successfully updated config.yaml", "✅".green());
+    println!("{} Successfully updated repos.yaml", "✅".green());
     println!("   {} repositories were synchronized", sync_map.len());
 
     Ok(())

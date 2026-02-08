@@ -43,7 +43,7 @@ the `GITHUB_TOKEN` environment variable.
 - `--create-only`: A "dry-run" mode. It prepares the PR but does not create it
 on GitHub.
 - `-c, --config <CONFIG>`: Path to the configuration file. Defaults to
-`config.yaml`.
+`repos.yaml`.
 - `-t, --tag <TAG>`: Filter repositories by tag. Can be specified multiple
 times.
 - `-e, --exclude-tag <EXCLUDE_TAG>`: Exclude repositories with a specific tag.

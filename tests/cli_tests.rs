@@ -15,7 +15,7 @@ struct Workspace {
 impl Workspace {
     fn new() -> Self {
         let root = TempDir::new().expect("Failed to create temp dir");
-        let config_path = root.path().join("config.yaml");
+        let config_path = root.path().join("repos.yaml");
 
         Self { root, config_path }
     }

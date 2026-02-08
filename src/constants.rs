@@ -27,7 +27,7 @@ pub mod github {
 /// Default values for configuration
 pub mod config {
     /// Default configuration file name
-    pub const DEFAULT_CONFIG_FILE: &str = "config.yaml";
+    pub const DEFAULT_CONFIG_FILE: &str = "repos.yaml";
 
     /// Default output directory
     pub const DEFAULT_LOGS_DIR: &str = "output";
