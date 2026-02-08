@@ -347,7 +347,11 @@ mod tests {
 
     #[test]
     fn parse_jira_input_with_url() {
-        let result = parse_jira_input("https://company.atlassian.net/browse/MAINT-1234").unwrap();
+        let result = parse_jira_input_with_base_url(
+            "https://company.atlassian.net/browse/MAINT-1234",
+            None, // Don't require JIRA_URL env var
+        )
+        .unwrap();
         assert_eq!(result.0, "https://company.atlassian.net");
         assert_eq!(result.1, "MAINT-1234");
     }
