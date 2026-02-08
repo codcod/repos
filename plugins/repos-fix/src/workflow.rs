@@ -663,7 +663,9 @@ mod tests {
         );
         let keywords = FixWorkflow::extract_keywords(&ticket, 50);
 
-        assert!(keywords.contains(&"payment".to_string()) || keywords.contains(&"payments".to_string()));
+        assert!(
+            keywords.contains(&"payment".to_string()) || keywords.contains(&"payments".to_string())
+        );
         assert!(keywords.contains(&"timeout".to_string()));
         assert!(!keywords.contains(&"when".to_string()));
 
@@ -679,8 +681,14 @@ mod tests {
             vec!["payments"],
         );
         let files = vec![
-            ("payments-guide.md".to_string(), "Payment retries and timeouts".to_string()),
-            ("checkout.md".to_string(), "Checkout flow details".to_string()),
+            (
+                "payments-guide.md".to_string(),
+                "Payment retries and timeouts".to_string(),
+            ),
+            (
+                "checkout.md".to_string(),
+                "Checkout flow details".to_string(),
+            ),
             ("misc.md".to_string(), "Unrelated content".to_string()),
         ];
 

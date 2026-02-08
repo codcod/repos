@@ -101,10 +101,7 @@ impl JiraClient {
         Self::parse_ticket_data(data, num_comments)
     }
 
-    fn parse_ticket_data(
-        data: serde_json::Value,
-        num_comments: usize,
-    ) -> Result<JiraTicket> {
+    fn parse_ticket_data(data: serde_json::Value, num_comments: usize) -> Result<JiraTicket> {
         let fields = data
             .get("fields")
             .context("Missing 'fields' in JIRA response")?;
@@ -309,10 +306,7 @@ pub fn parse_jira_input(input: &str) -> Result<(String, String)> {
     parse_jira_input_with_base_url(input, Some(jira_url.as_str()))
 }
 
-fn parse_jira_input_with_base_url(
-    input: &str,
-    jira_url: Option<&str>,
-) -> Result<(String, String)> {
+fn parse_jira_input_with_base_url(input: &str, jira_url: Option<&str>) -> Result<(String, String)> {
     let input = input.trim();
     if input.is_empty() {
         anyhow::bail!("JIRA ticket input cannot be empty");
@@ -337,9 +331,8 @@ fn parse_jira_input_with_base_url(
         anyhow::bail!("Could not extract ticket ID from URL: {}", input);
     }
 
-    let jira_url = jira_url.context(
-        "JIRA_URL not set. Provide full URL or set JIRA_URL environment variable",
-    )?;
+    let jira_url = jira_url
+        .context("JIRA_URL not set. Provide full URL or set JIRA_URL environment variable")?;
 
     Ok((
         jira_url.trim_end_matches('/').to_string(),
@@ -354,8 +347,7 @@ mod tests {
 
     #[test]
     fn parse_jira_input_with_url() {
-        let result =
-            parse_jira_input("https://company.atlassian.net/browse/MAINT-1234").unwrap();
+        let result = parse_jira_input("https://company.atlassian.net/browse/MAINT-1234").unwrap();
         assert_eq!(result.0, "https://company.atlassian.net");
         assert_eq!(result.1, "MAINT-1234");
     }
