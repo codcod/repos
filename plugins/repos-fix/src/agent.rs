@@ -4,6 +4,7 @@ use std::fs;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
 use std::process::{Command, Stdio};
+use std::sync::{Arc, Mutex};
 use std::thread;
 
 pub struct CursorAgentRunner {
@@ -64,22 +65,28 @@ impl CursorAgentRunner {
             .stderr(Stdio::piped());
 
         let mut child = cmd.spawn().context("Failed to spawn cursor-agent")?;
+        let stdout_tail = Arc::new(Mutex::new(Vec::new()));
+        let stderr_tail = Arc::new(Mutex::new(Vec::new()));
 
         let stdout_handle = child.stdout.take().map(|stdout| {
+            let stdout_tail = Arc::clone(&stdout_tail);
             thread::spawn(move || {
                 let reader = BufReader::new(stdout);
                 for line in reader.lines().map_while(Result::ok) {
                     // Show progress indicators
                     Self::display_progress(&line, ask);
+                    Self::capture_tail_line(&stdout_tail, line);
                 }
             })
         });
 
         let stderr_handle = child.stderr.take().map(|stderr| {
+            let stderr_tail = Arc::clone(&stderr_tail);
             thread::spawn(move || {
                 let reader = BufReader::new(stderr);
                 for line in reader.lines().map_while(Result::ok) {
                     eprintln!("{}", line);
+                    Self::capture_tail_line(&stderr_tail, line);
                 }
             })
         });
@@ -105,7 +112,30 @@ impl CursorAgentRunner {
                 println!("📄 Check SOLUTION_SUMMARY.md for details");
             }
         } else {
-            anyhow::bail!("cursor-agent exited with status: {}", status);
+            let stdout_tail = stdout_tail
+                .lock()
+                .map(|lines| lines.clone())
+                .unwrap_or_default();
+            let stderr_tail = stderr_tail
+                .lock()
+                .map(|lines| lines.clone())
+                .unwrap_or_default();
+            let mut tail_summary = String::new();
+
+            if !stdout_tail.is_empty() {
+                tail_summary.push_str("\n--- stdout (tail) ---\n");
+                tail_summary.push_str(&stdout_tail.join("\n"));
+            }
+            if !stderr_tail.is_empty() {
+                tail_summary.push_str("\n--- stderr (tail) ---\n");
+                tail_summary.push_str(&stderr_tail.join("\n"));
+            }
+
+            anyhow::bail!(
+                "cursor-agent exited with status: {}{}",
+                status,
+                tail_summary
+            );
         }
 
         println!("{}", "=".repeat(60));
@@ -128,6 +158,17 @@ impl CursorAgentRunner {
             print!("✅ Validating... ");
         } else if line_lower.contains("error") || line_lower.contains("failed") {
             eprintln!("❌ Error: {}", line);
+        }
+    }
+
+    fn capture_tail_line(buffer: &Arc<Mutex<Vec<String>>>, line: String) {
+        const MAX_LINES: usize = 80;
+        if let Ok(mut lines) = buffer.lock() {
+            if lines.len() >= MAX_LINES {
+                let overflow = lines.len() + 1 - MAX_LINES;
+                lines.drain(0..overflow);
+            }
+            lines.push(line);
         }
     }
 
@@ -179,6 +220,10 @@ impl CursorAgentRunner {
     }
 
     pub fn verify_solution(&self, workspace_dir: &Path) -> Result<bool> {
+        if !self.verify_analysis(workspace_dir)? {
+            return Ok(false);
+        }
+
         let solution_file = workspace_dir.join("SOLUTION_SUMMARY.md");
 
         if !solution_file.exists() {
@@ -195,6 +240,82 @@ impl CursorAgentRunner {
         }
 
         println!("✅ SOLUTION_SUMMARY.md created successfully");
+        Ok(true)
+    }
+
+    fn verify_analysis(&self, workspace_dir: &Path) -> Result<bool> {
+        let analysis_file = workspace_dir.join("ANALYSIS.md");
+
+        if !analysis_file.exists() {
+            eprintln!("⚠️  ANALYSIS.md not found");
+            return Ok(false);
+        }
+
+        let content =
+            fs::read_to_string(&analysis_file).context("Failed to read ANALYSIS.md")?;
+
+        if content.trim().is_empty() {
+            eprintln!("⚠️  ANALYSIS.md is empty");
+            return Ok(false);
+        }
+
+        let required_sections = [
+            "- Root cause hypothesis:",
+            "- Target files/components:",
+            "- Plan:",
+        ];
+        let lines: Vec<&str> = content.lines().collect();
+        let mut all_sections_present = true;
+
+        for section in required_sections {
+            let mut found = false;
+            let mut filled = false;
+
+            for (index, line) in lines.iter().enumerate() {
+                let trimmed = line.trim();
+                if trimmed.starts_with(section) {
+                    found = true;
+                    let remainder = trimmed[section.len()..].trim();
+                    if !remainder.is_empty() {
+                        filled = true;
+                        break;
+                    }
+
+                    for next_line in lines.iter().skip(index + 1) {
+                        let next_trim = next_line.trim();
+                        if next_trim.is_empty() {
+                            continue;
+                        }
+                        if required_sections
+                            .iter()
+                            .any(|label| next_trim.starts_with(label))
+                        {
+                            break;
+                        }
+                        filled = true;
+                        break;
+                    }
+                    break;
+                }
+            }
+
+            if !found {
+                eprintln!("⚠️  ANALYSIS.md missing section: {}", section);
+                all_sections_present = false;
+                continue;
+            }
+
+            if !filled {
+                eprintln!("⚠️  ANALYSIS.md section not filled: {}", section);
+                all_sections_present = false;
+            }
+        }
+
+        if !all_sections_present {
+            return Ok(false);
+        }
+
+        println!("✅ ANALYSIS.md created successfully");
         Ok(true)
     }
 }

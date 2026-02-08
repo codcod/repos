@@ -14,6 +14,7 @@ pub struct FixWorkflow {
     ask_mode: bool,
     workspace_dir: Option<PathBuf>,
     additional_prompt: Option<String>,
+    num_comments: usize,
     debug: bool,
 }
 
@@ -24,6 +25,7 @@ impl FixWorkflow {
         ask_mode: bool,
         workspace_dir: Option<PathBuf>,
         additional_prompt: Option<String>,
+        num_comments: usize,
         debug: bool,
     ) -> Self {
         Self {
@@ -32,6 +34,7 @@ impl FixWorkflow {
             ask_mode,
             workspace_dir,
             additional_prompt,
+            num_comments,
             debug,
         }
     }
@@ -134,7 +137,7 @@ impl FixWorkflow {
         println!("{}", "Step 1: Fetching JIRA ticket...".bold().cyan());
         let (base_url, ticket_id) = parse_jira_input(&self.ticket)?;
         let jira_client = JiraClient::with_base_url(base_url)?;
-        let ticket = jira_client.get_ticket(&ticket_id)?;
+        let ticket = jira_client.get_ticket(&ticket_id, self.num_comments)?;
 
         println!(
             "  {} Ticket: {} - {}",
@@ -339,6 +342,7 @@ impl FixWorkflow {
             println!("  • mission-context.json - Complete analysis data");
             println!("  • cursor_prompt.md - Implementation guidelines, the 'rulebook' for Cursor");
             println!("  • agent_prompt.md - The 'mission' for Cursor Agent");
+            println!("  • ANALYSIS.md - Pre-change analysis and plan");
             println!("  • SOLUTION_SUMMARY.md - Solution details");
             println!();
         } else {

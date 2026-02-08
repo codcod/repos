@@ -117,6 +117,7 @@ When you run `repos fix`, the following steps occur:
 6.  **Run Cursor Agent**:
     -   Executes `cursor-agent` with `--force` and `--print` flags.
     -   **Auto-Retry**: If the agent fails (e.g., build fails, tests fail), it automatically retries up to **3 times**, feeding the error message back to the AI.
+    -   **Workflow Switch**: CVE/security tickets use a safe upgrade protocol (no vulnerability reproduction); bug fixes require a repro-first flow.
 7.  **Validate**: The agent validates the fix by running build and test commands detected during analysis.
 8.  **Report**: Generates `SOLUTION_SUMMARY.md` with implementation details.
 
@@ -130,8 +131,11 @@ workspace/fix/MAINT-1234/
 ├── mission-context.json   # Complete project analysis & ticket data
 ├── cursor_prompt.md       # The "rulebook" for Cursor
 ├── agent_prompt.md        # The specific mission prompt
+├── ANALYSIS.md            # Required pre-change analysis (root cause & plan)
 ├── SOLUTION_SUMMARY.md    # Final report of the implemented solution
 ```
+
+Note: `ANALYSIS.md` is expected to be filled in by the agent before any changes.
 
 ## Supported Platforms
 

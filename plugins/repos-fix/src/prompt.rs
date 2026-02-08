@@ -82,6 +82,7 @@ impl PromptGenerator {
         let tmpl = env.get_template("cursor_prompt")?;
 
         let platform_guidelines = Self::get_platform_guidelines(&analysis.platform.platform_type);
+        let is_security_task = Self::is_security_task(ticket);
 
         let ctx = context! {
             platform_emoji => analysis.platform.platform_type.emoji(),
@@ -129,6 +130,7 @@ impl PromptGenerator {
             main_build => analysis.build_commands.main_build,
             test_compile => analysis.build_commands.test_compile,
             test_run => analysis.build_commands.test_run,
+            is_security_task => is_security_task,
             additional_prompt => additional_prompt,
         };
 
@@ -148,6 +150,7 @@ impl PromptGenerator {
         } else {
             "2"
         };
+        let is_security_task = Self::is_security_task(ticket);
 
         let ctx = context! {
             mode_title => if ask_mode { "ASK Mode Analysis" } else { "Automated Maintenance Assistant" },
@@ -158,6 +161,7 @@ impl PromptGenerator {
             test_compile => analysis.build_commands.test_compile,
             test_run => analysis.build_commands.test_run,
             test_step_num => test_step_num,
+            is_security_task => is_security_task,
         };
 
         Ok(tmpl.render(ctx)?)
@@ -177,6 +181,7 @@ impl PromptGenerator {
         } else {
             "7"
         };
+        let is_security_task = Self::is_security_task(ticket);
 
         let ctx = context! {
             ask_mode => ask_mode,
@@ -185,6 +190,7 @@ impl PromptGenerator {
             test_compile => analysis.build_commands.test_compile,
             test_run => analysis.build_commands.test_run,
             test_run_step => test_run_step,
+            is_security_task => is_security_task,
             additional_prompt => additional_prompt,
         };
 
@@ -218,5 +224,30 @@ impl PromptGenerator {
             ),
             PlatformType::Unknown => String::new(),
         }
+    }
+
+    fn is_security_task(ticket: &JiraTicket) -> bool {
+        let mut haystack = format!(
+            "{} {} {}",
+            ticket.title, ticket.description, ticket.issue_type
+        )
+        .to_lowercase();
+
+        for label in &ticket.labels {
+            haystack.push(' ');
+            haystack.push_str(&label.to_lowercase());
+        }
+
+        let security_keywords = ["cve-", "vulnerability", "security", "cwe-", "cvss"];
+        let upgrade_keywords = ["upgrade", "update", "bump", "patch", "dependency"];
+
+        let has_security_keyword = security_keywords
+            .iter()
+            .any(|keyword| haystack.contains(keyword));
+        let has_upgrade_keyword = upgrade_keywords
+            .iter()
+            .any(|keyword| haystack.contains(keyword));
+
+        has_security_keyword || (has_upgrade_keyword && haystack.contains("cve"))
     }
 }

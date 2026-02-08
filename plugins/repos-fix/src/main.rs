@@ -34,6 +34,10 @@ struct Args {
     /// Additional prompt to append to the generated prompt
     #[arg(short, long)]
     prompt: Option<String>,
+
+    /// Number of recent JIRA comments to include in prompts
+    #[arg(long, default_value_t = 10)]
+    num_comments: usize,
 }
 
 fn main() -> Result<()> {
@@ -59,6 +63,7 @@ fn main() -> Result<()> {
         args.ask,
         args.workspace,
         args.prompt,
+        args.num_comments,
         debug,
     );
 

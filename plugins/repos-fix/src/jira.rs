@@ -10,6 +10,7 @@ pub struct JiraTicket {
     pub key: String,
     pub title: String,
     pub description: String,
+    pub labels: Vec<String>,
     pub status: String,
     pub priority: String,
     pub issue_type: String,
@@ -18,6 +19,7 @@ pub struct JiraTicket {
     pub created: String,
     pub updated: String,
     pub attachments: Vec<JiraAttachment>,
+    pub comments: Vec<JiraComment>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -27,6 +29,13 @@ pub struct JiraAttachment {
     pub size: Option<u64>,
     pub url: String,
     pub source: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct JiraComment {
+    pub author: String,
+    pub created: String,
+    pub body: String,
 }
 
 pub struct JiraClient {
@@ -66,7 +75,7 @@ impl JiraClient {
         Ok(Self { client, base_url })
     }
 
-    pub fn get_ticket(&self, ticket_id: &str) -> Result<JiraTicket> {
+    pub fn get_ticket(&self, ticket_id: &str, num_comments: usize) -> Result<JiraTicket> {
         let url = format!("{}/rest/api/3/issue/{}", self.base_url, ticket_id);
 
         let response = self
@@ -85,10 +94,10 @@ impl JiraClient {
         let ticket_data: serde_json::Value =
             response.json().context("Failed to parse JIRA response")?;
 
-        self.parse_ticket(ticket_data)
+        self.parse_ticket(ticket_data, num_comments)
     }
 
-    fn parse_ticket(&self, data: serde_json::Value) -> Result<JiraTicket> {
+    fn parse_ticket(&self, data: serde_json::Value, num_comments: usize) -> Result<JiraTicket> {
         let fields = data
             .get("fields")
             .context("Missing 'fields' in JIRA response")?;
@@ -109,6 +118,20 @@ impl JiraClient {
 
         // Clean HTML from description
         let description = html2text::from_read(description.as_bytes(), 80);
+
+        let labels = fields
+            .get("labels")
+            .and_then(|labels| labels.as_array())
+            .map(|labels| {
+                labels
+                    .iter()
+                    .filter_map(|label| label.as_str())
+                    .map(|label| label.to_string())
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+
+        let comments = Self::parse_comments(fields, rendered_fields, num_comments);
 
         let mut attachments = Vec::new();
 
@@ -138,6 +161,7 @@ impl JiraClient {
                 .unwrap_or("")
                 .to_string(),
             description,
+            labels,
             status: fields
                 .get("status")
                 .and_then(|s| s.get("name"))
@@ -179,6 +203,7 @@ impl JiraClient {
                 .unwrap_or("")
                 .to_string(),
             attachments,
+            comments,
         })
     }
 
@@ -202,6 +227,70 @@ impl JiraClient {
                 .to_string(),
             source: "jira".to_string(),
         })
+    }
+
+    fn parse_comments(
+        fields: &serde_json::Value,
+        rendered_fields: Option<&serde_json::Value>,
+        num_comments: usize,
+    ) -> Vec<JiraComment> {
+        let Some(comment_array) = fields
+            .get("comment")
+            .and_then(|comment| comment.get("comments"))
+            .and_then(|comments| comments.as_array())
+        else {
+            return Vec::new();
+        };
+
+        let rendered_comments = rendered_fields
+            .and_then(|rendered| rendered.get("comment"))
+            .and_then(|comment| comment.get("comments"))
+            .and_then(|comments| comments.as_array());
+
+        if num_comments == 0 {
+            return Vec::new();
+        }
+
+        let start_index = comment_array.len().saturating_sub(num_comments);
+        comment_array
+            .iter()
+            .enumerate()
+            .skip(start_index)
+            .filter_map(|(index, comment)| {
+                let rendered_body = rendered_comments
+                    .and_then(|comments| comments.get(index))
+                    .and_then(|comment| comment.get("body"))
+                    .and_then(|body| body.as_str());
+
+                let raw_body = rendered_body
+                    .or_else(|| comment.get("body").and_then(|body| body.as_str()))
+                    .unwrap_or("");
+
+                let body = html2text::from_read(raw_body.as_bytes(), 80).trim().to_string();
+                if body.is_empty() {
+                    return None;
+                }
+
+                let author = comment
+                    .get("author")
+                    .and_then(|author| author.get("displayName"))
+                    .and_then(|name| name.as_str())
+                    .unwrap_or("Unknown")
+                    .to_string();
+
+                let created = comment
+                    .get("created")
+                    .and_then(|created| created.as_str())
+                    .unwrap_or("")
+                    .to_string();
+
+                Some(JiraComment {
+                    author,
+                    created,
+                    body,
+                })
+            })
+            .collect()
     }
 }
 
