@@ -211,6 +211,7 @@ pub fn validate_commit_message(message: &Option<String>) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
 
     #[test]
     fn test_validate_run_args_valid_command() {
@@ -408,6 +409,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_validate_pr_args_with_env_var() {
         // Save original state
         let original_token = std::env::var("GITHUB_TOKEN").ok();
@@ -433,6 +435,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_validate_pr_args_missing_token() {
         // Save the current environment variable state
         let original_token = std::env::var("GITHUB_TOKEN").ok();
