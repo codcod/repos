@@ -272,9 +272,9 @@ impl CursorAgentRunner {
 
             for (index, line) in lines.iter().enumerate() {
                 let trimmed = line.trim();
-                if trimmed.starts_with(section) {
+                if let Some(remainder) = trimmed.strip_prefix(section) {
                     found = true;
-                    let remainder = trimmed[section.len()..].trim();
+                    let remainder = remainder.trim();
                     if !remainder.is_empty() {
                         filled = true;
                         break;

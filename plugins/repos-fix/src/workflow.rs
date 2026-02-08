@@ -23,6 +23,7 @@ pub struct FixWorkflow {
 }
 
 impl FixWorkflow {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         repos: Vec<Repository>,
         ticket: String,
@@ -626,5 +627,105 @@ impl FixWorkflow {
         .keys()
         .copied()
         .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    fn make_ticket(title: &str, description: &str, labels: Vec<&str>) -> JiraTicket {
+        JiraTicket {
+            id: "1".to_string(),
+            key: "MAINT-1".to_string(),
+            title: title.to_string(),
+            description: description.to_string(),
+            labels: labels.into_iter().map(|label| label.to_string()).collect(),
+            status: "Open".to_string(),
+            priority: "P2".to_string(),
+            issue_type: "Bug".to_string(),
+            assignee: "Unassigned".to_string(),
+            reporter: "Reporter".to_string(),
+            created: "2024-01-01".to_string(),
+            updated: "2024-01-02".to_string(),
+            attachments: Vec::new(),
+            comments: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn extract_keywords_filters_stopwords_and_short_tokens() {
+        let ticket = make_ticket(
+            "Fix payment timeout in checkout",
+            "Timeout occurs when user tries to pay",
+            vec!["payments", "urgent"],
+        );
+        let keywords = FixWorkflow::extract_keywords(&ticket, 50);
+
+        assert!(keywords.contains(&"payment".to_string()) || keywords.contains(&"payments".to_string()));
+        assert!(keywords.contains(&"timeout".to_string()));
+        assert!(!keywords.contains(&"when".to_string()));
+
+        let unique: HashSet<_> = keywords.iter().cloned().collect();
+        assert_eq!(unique.len(), keywords.len());
+    }
+
+    #[test]
+    fn select_inline_knowledge_scores_by_name_and_content() {
+        let ticket = make_ticket(
+            "Payment failure during checkout",
+            "Timeout when processing payment",
+            vec!["payments"],
+        );
+        let files = vec![
+            ("payments-guide.md".to_string(), "Payment retries and timeouts".to_string()),
+            ("checkout.md".to_string(), "Checkout flow details".to_string()),
+            ("misc.md".to_string(), "Unrelated content".to_string()),
+        ];
+
+        let selected = FixWorkflow::select_inline_knowledge(&ticket, &files);
+        assert!(!selected.is_empty());
+        assert_eq!(selected[0].0, "payments-guide.md");
+    }
+
+    #[test]
+    fn select_inline_knowledge_falls_back_to_first_file() {
+        let ticket = make_ticket("No matching keywords", "Nothing in common", vec![]);
+        let files = vec![
+            ("alpha.md".to_string(), "first file".to_string()),
+            ("beta.md".to_string(), "second file".to_string()),
+        ];
+
+        let selected = FixWorkflow::select_inline_knowledge(&ticket, &files);
+        assert_eq!(selected.len(), 1);
+        assert_eq!(selected[0].0, "alpha.md");
+    }
+
+    #[test]
+    fn build_inline_knowledge_truncates_long_entries() {
+        let long_content = "a".repeat(5000);
+        let files = vec![("guide.md".to_string(), long_content)];
+
+        let inline = FixWorkflow::build_inline_knowledge(&files).expect("inline");
+        assert!(inline.contains("## Knowledge Base: guide.md"));
+        assert!(inline.contains("[Truncated]"));
+    }
+
+    #[test]
+    fn build_inline_knowledge_empty_returns_none() {
+        assert!(FixWorkflow::build_inline_knowledge(&[]).is_none());
+    }
+
+    #[test]
+    fn list_markdown_files_only_returns_md() {
+        let temp_dir = tempfile::tempdir().expect("tempdir");
+        let md_path = temp_dir.path().join("one.md");
+        let txt_path = temp_dir.path().join("two.txt");
+        fs::write(&md_path, "# doc").expect("write md");
+        fs::write(&txt_path, "ignore").expect("write txt");
+
+        let files = FixWorkflow::list_markdown_files(temp_dir.path()).unwrap();
+        assert_eq!(files, vec![md_path]);
     }
 }

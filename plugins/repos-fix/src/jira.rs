@@ -98,6 +98,13 @@ impl JiraClient {
     }
 
     fn parse_ticket(&self, data: serde_json::Value, num_comments: usize) -> Result<JiraTicket> {
+        Self::parse_ticket_data(data, num_comments)
+    }
+
+    fn parse_ticket_data(
+        data: serde_json::Value,
+        num_comments: usize,
+    ) -> Result<JiraTicket> {
         let fields = data
             .get("fields")
             .context("Missing 'fields' in JIRA response")?;
@@ -297,6 +304,15 @@ impl JiraClient {
 }
 
 pub fn parse_jira_input(input: &str) -> Result<(String, String)> {
+    let jira_url = env::var("JIRA_URL")
+        .context("JIRA_URL not set. Provide full URL or set JIRA_URL environment variable")?;
+    parse_jira_input_with_base_url(input, Some(jira_url.as_str()))
+}
+
+fn parse_jira_input_with_base_url(
+    input: &str,
+    jira_url: Option<&str>,
+) -> Result<(String, String)> {
     let input = input.trim();
     if input.is_empty() {
         anyhow::bail!("JIRA ticket input cannot be empty");
@@ -321,12 +337,122 @@ pub fn parse_jira_input(input: &str) -> Result<(String, String)> {
         anyhow::bail!("Could not extract ticket ID from URL: {}", input);
     }
 
-    // Assume it's just a ticket ID
-    let jira_url = env::var("JIRA_URL")
-        .context("JIRA_URL not set. Provide full URL or set JIRA_URL environment variable")?;
+    let jira_url = jira_url.context(
+        "JIRA_URL not set. Provide full URL or set JIRA_URL environment variable",
+    )?;
 
     Ok((
         jira_url.trim_end_matches('/').to_string(),
         input.to_string(),
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn parse_jira_input_with_url() {
+        let result =
+            parse_jira_input("https://company.atlassian.net/browse/MAINT-1234").unwrap();
+        assert_eq!(result.0, "https://company.atlassian.net");
+        assert_eq!(result.1, "MAINT-1234");
+    }
+
+    #[test]
+    fn parse_jira_input_with_ticket_id_uses_env() {
+        let result =
+            parse_jira_input_with_base_url("MAINT-5678", Some("https://company.atlassian.net/"))
+                .unwrap();
+        assert_eq!(result.0, "https://company.atlassian.net");
+        assert_eq!(result.1, "MAINT-5678");
+    }
+
+    #[test]
+    fn parse_jira_input_rejects_empty() {
+        assert!(parse_jira_input("  ").is_err());
+    }
+
+    #[test]
+    fn parse_ticket_prefers_rendered_fields_and_parses_attachments() {
+        let data = json!({
+            "id": "1001",
+            "key": "MAINT-1",
+            "fields": {
+                "summary": "Fix bug",
+                "description": "Raw <b>desc</b>",
+                "labels": ["security", "backend"],
+                "status": { "name": "Open" },
+                "priority": { "name": "P1" },
+                "issuetype": { "name": "Bug" },
+                "assignee": { "displayName": "Ada" },
+                "reporter": { "displayName": "Bob" },
+                "created": "2024-01-01",
+                "updated": "2024-01-02",
+                "attachment": [
+                    {
+                        "filename": "log.txt",
+                        "mimeType": "text/plain",
+                        "size": 123,
+                        "content": "https://jira/att/1"
+                    }
+                ],
+                "comment": {
+                    "comments": [
+                        {
+                            "author": { "displayName": "Eve" },
+                            "created": "2024-01-03",
+                            "body": "Raw <p>body</p>"
+                        }
+                    ]
+                }
+            },
+            "renderedFields": {
+                "description": "<p>Rendered <strong>desc</strong></p>",
+                "comment": {
+                    "comments": [
+                        { "body": "<p>Rendered comment</p>" }
+                    ]
+                }
+            }
+        });
+
+        let ticket = JiraClient::parse_ticket_data(data, 1).unwrap();
+
+        assert_eq!(ticket.key, "MAINT-1");
+        let description = ticket.description.to_lowercase();
+        assert!(description.contains("rendered"));
+        assert!(!description.contains("raw"));
+        assert_eq!(ticket.attachments.len(), 1);
+        assert_eq!(ticket.attachments[0].filename, "log.txt");
+        assert_eq!(ticket.attachments[0].source, "jira");
+        assert_eq!(ticket.comments.len(), 1);
+        assert!(ticket.comments[0].body.contains("Rendered comment"));
+    }
+
+    #[test]
+    fn parse_comments_respects_limit() {
+        let fields = json!({
+            "comment": {
+                "comments": [
+                    { "author": { "displayName": "A" }, "created": "2024-01-01", "body": "first" },
+                    { "author": { "displayName": "B" }, "created": "2024-01-02", "body": "second" }
+                ]
+            }
+        });
+        let rendered = json!({
+            "comment": {
+                "comments": [
+                    { "body": "first" },
+                    { "body": "second" }
+                ]
+            }
+        });
+
+        let comments = JiraClient::parse_comments(&fields, Some(&rendered), 1);
+        assert_eq!(comments.len(), 1);
+        assert_eq!(comments[0].author, "B");
+        assert_eq!(comments[0].body, "second");
+    }
 }

@@ -275,3 +275,101 @@ impl PromptGenerator {
         has_security_keyword || (has_upgrade_keyword && haystack.contains("cve"))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::domain::PlatformType;
+
+    fn make_ticket(
+        title: &str,
+        description: &str,
+        issue_type: &str,
+        labels: Vec<&str>,
+    ) -> JiraTicket {
+        JiraTicket {
+            id: "1".to_string(),
+            key: "MAINT-1".to_string(),
+            title: title.to_string(),
+            description: description.to_string(),
+            labels: labels.into_iter().map(|label| label.to_string()).collect(),
+            status: "Open".to_string(),
+            priority: "P1".to_string(),
+            issue_type: issue_type.to_string(),
+            assignee: "Unassigned".to_string(),
+            reporter: "Reporter".to_string(),
+            created: "2024-01-01".to_string(),
+            updated: "2024-01-02".to_string(),
+            attachments: Vec::new(),
+            comments: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn detects_security_keywords_in_ticket() {
+        let ticket = make_ticket(
+            "Upgrade dependency",
+            "Apply CVE-2024-0001 fix",
+            "Task",
+            vec![],
+        );
+        assert!(PromptGenerator::is_security_task(&ticket));
+    }
+
+    #[test]
+    fn detects_security_from_labels() {
+        let ticket = make_ticket(
+            "Routine maintenance",
+            "No mention of cve",
+            "Task",
+            vec!["security"],
+        );
+        assert!(PromptGenerator::is_security_task(&ticket));
+    }
+
+    #[test]
+    fn does_not_flag_upgrade_without_cve() {
+        let ticket = make_ticket(
+            "Upgrade dependencies",
+            "Upgrade libraries for performance",
+            "Task",
+            vec![],
+        );
+        assert!(!PromptGenerator::is_security_task(&ticket));
+    }
+
+    #[test]
+    fn unknown_platform_guidelines_empty() {
+        let guidelines = PromptGenerator::get_platform_guidelines(&PlatformType::Unknown);
+        assert!(guidelines.trim().is_empty());
+    }
+
+    #[test]
+    fn template_override_dir_prefers_xdg_config_home() {
+        let original_xdg = env::var("XDG_CONFIG_HOME").ok();
+        let original_home = env::var("HOME").ok();
+
+        let temp_dir = tempfile::tempdir().expect("tempdir");
+        unsafe {
+            env::set_var("XDG_CONFIG_HOME", temp_dir.path());
+            env::remove_var("HOME");
+        }
+
+        let path = template_override_dir().expect("path");
+        assert_eq!(path, temp_dir.path().join("repos").join("fix"));
+
+        unsafe {
+            if let Some(value) = original_xdg {
+                env::set_var("XDG_CONFIG_HOME", value);
+            } else {
+                env::remove_var("XDG_CONFIG_HOME");
+            }
+
+            if let Some(value) = original_home {
+                env::set_var("HOME", value);
+            } else {
+                env::remove_var("HOME");
+            }
+        }
+    }
+}
