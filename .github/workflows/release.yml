@@ -109,9 +109,13 @@ jobs:
           if [[ "${{ runner.os }}" == "Linux" ]]; then
             strip target/${{ matrix.target }}/release/repos
             strip target/${{ matrix.target }}/release/repos-health
+            strip target/${{ matrix.target }}/release/repos-review
+            strip target/${{ matrix.target }}/release/repos-fix
           else
             strip -x target/${{ matrix.target }}/release/repos
             strip -x target/${{ matrix.target }}/release/repos-health
+            strip -x target/${{ matrix.target }}/release/repos-review
+            strip -x target/${{ matrix.target }}/release/repos-fix
           fi
 
       - name: Upload artifacts
@@ -122,6 +126,8 @@ jobs:
             target/${{ matrix.target }}/release/repos
             target/${{ matrix.target }}/release/repos-health
             target/${{ matrix.target }}/release/repos-validate
+            target/${{ matrix.target }}/release/repos-review
+            target/${{ matrix.target }}/release/repos-fix
 
   # 4. Create the universal macOS binary from the previously built artifacts.
   #    This job is very fast as it does not re-compile anything.
@@ -146,7 +152,9 @@ jobs:
           lipo -create -output repos arm64/repos x86_64/repos
           lipo -create -output repos-health arm64/repos-health x86_64/repos-health
           lipo -create -output repos-validate arm64/repos-validate x86_64/repos-validate
-          strip -x repos repos-health repos-validate
+          lipo -create -output repos-review arm64/repos-review x86_64/repos-review
+          lipo -create -output repos-fix arm64/repos-fix x86_64/repos-fix
+          strip -x repos repos-health repos-validate repos-review repos-fix
 
       - name: Upload universal artifact
         uses: actions/upload-artifact@v6
@@ -156,6 +164,8 @@ jobs:
             repos
             repos-health
             repos-validate
+            repos-review
+            repos-fix
 
   # 5. Create the GitHub Release and upload all artifacts.
   #    This is the final publishing step.
@@ -191,6 +201,8 @@ jobs:
               tar -czf "repos-${VERSION}-${suffix}.tar.gz" -C "$dir" repos
               tar -czf "repos-health-${VERSION}-${suffix}.tar.gz" -C "$dir" repos-health
               tar -czf "repos-validate-${VERSION}-${suffix}.tar.gz" -C "$dir" repos-validate
+              tar -czf "repos-review-${VERSION}-${suffix}.tar.gz" -C "$dir" repos-review
+              tar -czf "repos-fix-${VERSION}-${suffix}.tar.gz" -C "$dir" repos-fix
             fi
           done
 
@@ -199,6 +211,8 @@ jobs:
             tar -czf "repos-${VERSION}-macos-universal.tar.gz" -C "dist/build-artifacts-macos-universal" repos
             tar -czf "repos-health-${VERSION}-macos-universal.tar.gz" -C "dist/build-artifacts-macos-universal" repos-health
             tar -czf "repos-validate-${VERSION}-macos-universal.tar.gz" -C "dist/build-artifacts-macos-universal" repos-validate
+            tar -czf "repos-review-${VERSION}-macos-universal.tar.gz" -C "dist/build-artifacts-macos-universal" repos-review
+            tar -czf "repos-fix-${VERSION}-macos-universal.tar.gz" -C "dist/build-artifacts-macos-universal" repos-fix
           fi
 
           # List final assets
