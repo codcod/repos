@@ -137,12 +137,12 @@ jobs:
     runs-on: macos-latest
     steps:
       - name: Download macOS arm64 artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: build-artifacts-macos-arm64
           path: arm64
       - name: Download macOS x86_64 artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: build-artifacts-macos-x86_64
           path: x86_64
@@ -185,7 +185,7 @@ jobs:
           echo "VERSION=$VERSION" >> $GITHUB_ENV
 
       - name: Download all build artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           path: dist
 
