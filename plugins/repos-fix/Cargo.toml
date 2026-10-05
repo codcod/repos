@@ -20,7 +20,7 @@ regex = "1.10"
 tempfile = "3.10"
 html2text = "0.12"
 url = "2.5"
-base64 = "0.22"
+base64 = "0.23"
 minijinja = "2.0"
 
 # Use local repos library for plugin context
