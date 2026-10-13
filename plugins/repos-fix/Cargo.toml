@@ -21,7 +21,7 @@ tempfile = "3.10"
 html2text = "0.12"
 url = "2.5"
 base64 = "0.22"
-minijinja = "2.0"
+minijinja = "3.0"
 
 # Use local repos library for plugin context
 repos = { path = "../../" }
